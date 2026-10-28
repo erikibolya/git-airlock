@@ -87,12 +87,16 @@ jobs:
       - name: Build installer
         shell: pwsh
         run: ./installer/build.ps1 -SkipDesktop -Version ${{ github.ref_name }}
+      - name: Stage release files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item desktop/build/bin/airlock-desktop.exe dist/
+          Copy-Item installer/dist/GitAirlockSetup-*.exe dist/
       - uses: actions/upload-artifact@v4
         with:
           name: airlock-desktop-windows
-          path: |
-            desktop/build/bin/airlock-desktop.exe
-            installer/dist/*.exe
+          path: dist/*
 
   release:
     needs: [build, desktop]
