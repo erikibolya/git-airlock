@@ -93,6 +93,7 @@ type App struct {
 	quitting atomic.Bool
 	tray     atomic.Bool
 	syncMu   sync.Mutex
+	syncItem *systray.MenuItem
 }
 
 // ServeHTTP is the Wails asset handler. It forwards to the setup screen until a
@@ -216,6 +217,9 @@ func (a *App) ApplyConfig(path string) PickResult {
 	}
 	if err := saveConfigPath(path); err != nil {
 		return PickResult{Error: err.Error()}
+	}
+	if a.syncItem != nil {
+		a.syncItem.Enable()
 	}
 	return PickResult{Path: path}
 }
@@ -346,6 +350,7 @@ func (a *App) onReady(icon []byte) {
 	} else {
 		mSync.Disable()
 	}
+	a.syncItem = mSync
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "Quit Git Airlock")
 	a.tray.Store(true)
