@@ -75,7 +75,7 @@ a{color:var(--accent)}
 <header>
   <div class="brand"><a href="/" class="brand-link">Git Airlock</a></div>
   {{if .Config}}<div class="repo">{{if .BasePath}}<a href="/">all repositories</a> · {{end}}{{.Config.Repo}} · {{.Config.Provider}}{{if .Config.AutoPR}} · auto PR{{end}}</div>{{end}}
-  {{if .BasePath}}<nav><a href="{{.BasePath}}">overview</a><a href="{{.BasePath}}manual">manual</a><a href="{{.BasePath}}logs">logs</a></nav>{{end}}
+  {{if .BasePath}}<nav><a href="{{.BasePath}}">overview</a><a href="{{.BasePath}}manual">manual</a><a href="{{.BasePath}}logs">logs</a><a href="/repositories">repositories</a></nav>{{else}}<nav><a href="/repositories">repositories</a></nav>{{end}}
 </header>
 <main>
 {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}

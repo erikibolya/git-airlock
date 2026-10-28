@@ -63,6 +63,7 @@ func (d *Dashboard) Repos() []*Repo { return d.repos }
 func (d *Dashboard) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", d.handleIndex)
+	mux.HandleFunc("/repositories", d.handleRepositories)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})
@@ -131,6 +132,28 @@ func (d *Dashboard) handleIndex(w http.ResponseWriter, r *http.Request) {
 		data.StatusSub = data.RepoCountText + " watched. Everything is synced."
 	}
 	d.render(w, "repos", data)
+}
+
+// handleRepositories explains how the web dashboard is configured. The desktop
+// app intercepts this path and serves its repository picker instead.
+func (d *Dashboard) handleRepositories(w http.ResponseWriter, r *http.Request) {
+	data := pageData{
+		Title:     "Repositories",
+		CSRF:      d.csrf,
+		Now:       time.Now(),
+		AuthMode:  authLabel(d.token),
+		RepoCount: len(d.repos),
+	}
+	data.RepoCountText = reposText(data.RepoCount)
+	for _, repo := range d.repos {
+		data.Repos = append(data.Repos, repoView{
+			Link:     "/repo/" + repo.Slug + "/",
+			Repo:     repo.Config.Repo,
+			Provider: repo.Config.Provider,
+			Base:     repo.Config.Base,
+		})
+	}
+	d.render(w, "repositories", data)
 }
 
 func (d *Dashboard) render(w http.ResponseWriter, name string, data pageData) {

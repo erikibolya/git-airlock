@@ -29,7 +29,7 @@ var templateFS embed.FS
 var pages = map[string]*template.Template{}
 
 func init() {
-	for _, name := range []string{"repos", "overview", "manual", "result", "logs"} {
+	for _, name := range []string{"repos", "repositories", "overview", "manual", "result", "logs"} {
 		pages[name] = template.Must(template.ParseFS(templateFS, "templates/layout.html", "templates/"+name+".html"))
 	}
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.1 — 2026-10-28
+
+- The dashboard header has a **repositories** link. In the desktop app it opens
+  the native repository picker (add/remove configs), so adding a repository no
+  longer requires finding the tray menu. The web dashboard shows how to pass
+  multiple `--config` flags.
+
 ## 1.6.0 — 2026-10-28
 
 - Packaging: Homebrew formula (tap `erikibolya/homebrew-git-airlock`), Scoop

@@ -134,6 +134,12 @@ func buildBox(paths []string) (*dashBox, error) {
 // ServeHTTP is the Wails asset handler. The repository picker takes over while
 // setupMode is set or until at least one config loads.
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// The dashboard links to /repositories; serve the native picker there.
+	if r.URL.Path == "/repositories" || r.URL.Path == "/setup" {
+		a.setupMode.Store(true)
+		a.serveSetup(w, r)
+		return
+	}
 	if !a.setupMode.Load() {
 		if box := a.current.Load(); box != nil {
 			box.handler.ServeHTTP(w, r)
