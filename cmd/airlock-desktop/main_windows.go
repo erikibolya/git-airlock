@@ -56,7 +56,7 @@ func main() {
 		walk.MsgBox(nil, "Git Airlock", err.Error(), walk.MsgBoxIconError)
 		os.Exit(1)
 	}
-	store, err := queue.Open(cfg.Queue, cfg.Mirror)
+	store, err := queue.Open(cfg.Queue, cfg.Mirror, cfg.QueueRemote)
 	if err != nil {
 		walk.MsgBox(nil, "Git Airlock", err.Error(), walk.MsgBoxIconError)
 		os.Exit(1)
@@ -444,7 +444,7 @@ func (a *app) changeConfig() {
 		walk.MsgBox(a.mw, "Git Airlock", err.Error(), walk.MsgBoxIconError)
 		return
 	}
-	store, err := queue.Open(cfg.Queue, cfg.Mirror)
+	store, err := queue.Open(cfg.Queue, cfg.Mirror, cfg.QueueRemote)
 	if err != nil {
 		walk.MsgBox(a.mw, "Git Airlock", err.Error(), walk.MsgBoxIconError)
 		return

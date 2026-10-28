@@ -72,10 +72,13 @@ type Store interface {
 
 // Open selects the queue transport. A queue value of "git" uses
 // refs/airlock/* in the mirror; anything else is a shared directory.
-func Open(queueCfg, mirror string) (Store, error) {
+func Open(queueCfg, mirror, queueRemote string) (Store, error) {
 	if queueCfg == "git" {
+		if queueRemote != "" {
+			return NewRemote(queueRemote), nil
+		}
 		if mirror == "" {
-			return nil, errors.New("queue=git requires mirror")
+			return nil, errors.New("queue=git requires mirror or queue_remote")
 		}
 		return NewGit(mirror), nil
 	}

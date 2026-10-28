@@ -10,14 +10,16 @@
 - **v0.5** — multi-repository worker (`--config` repeatable), terminal status
   command (`airlock status --watch`), duplicate-PR detection for merged/closed
   requests, `HeadSHA` in requests.
+- **v0.6** — remote queue over SSH (`queue_remote`) with a local cache; no
+  shared queue folder required.
 
 ## Next
 
-### Queue over SSH
+### Sync over SSH
 
-The git-ref queue currently needs both sides to see the bare mirror. Add a
-fetch/push mode so a workstation can use `ssh://` for the queue refs (and a
-local cache) without a shared mount.
+The queue can already travel over SSH; the commit mirror used by `sync` still
+needs a local path/clone. Add a managed mirror cache so the whole flow can use
+`ssh://` for both commits and queue refs.
 
 ### Multi-repository dashboards
 

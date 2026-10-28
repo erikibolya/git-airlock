@@ -20,6 +20,9 @@ type Config struct {
 	Mirror string `toml:"mirror"`
 	// Queue is the shared directory with requests/, results/, processed/.
 	Queue string `toml:"queue"`
+	// QueueRemote optionally carries refs/airlock/* over git (e.g. ssh://)
+	// instead of reading them from the local mirror.
+	QueueRemote string `toml:"queue_remote"`
 	// Provider is "gitea", "github" or "gitlab".
 	Provider string `toml:"provider"`
 	// API is the provider REST base URL (required for Gitea).
@@ -181,8 +184,11 @@ remote = %q
 # Bare mirror used as the push target for the isolated machine.
 mirror = %q
 
-# Shared directory for requests/results between isolated host and worker.
+# Shared directory for requests/results, or "git" for refs/airlock/*.
 queue = %q
+
+# Optional: push/fetch queue refs to this remote instead of the local mirror.
+queue_remote = %q
 
 # gitea, github or gitlab.
 provider = %q
@@ -198,6 +204,6 @@ base = %q
 
 # Default merge policy: never, when-green or now.
 merge = %q
-`, c.Repo, c.Remote, c.Mirror, c.Queue, c.Provider, c.API, c.CA, c.Base, c.Merge)
+`, c.Repo, c.Remote, c.Mirror, c.Queue, c.QueueRemote, c.Provider, c.API, c.CA, c.Base, c.Merge)
 	return os.WriteFile(path, []byte(body), 0o644)
 }

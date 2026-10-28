@@ -221,6 +221,9 @@ For a private CA, set `ca` to a PEM bundle.
   `refs/airlock/requests/*` and `refs/airlock/results/*` in the bare mirror.
   No second shared folder is needed; the queue lives in the mirror.
   Both sides still need access to the mirror (direct path or the same mount).
+- `queue = "git"` plus `queue_remote = "ssh://..."` — the refs are pushed and
+  fetched through a local cache, so the queue itself needs no shared folder.
+  The `mirror` path is still the local clone used for the commit sync.
 
 The git-ref transport is the right choice when the mirror is already shared but
 you do not want another writable queue directory on the isolated machine.
@@ -291,9 +294,9 @@ system.
 
 - The worker supports multiple `--config` values; the desktop and web dashboards
   show one repository at a time.
-- The queue is either a shared directory or `refs/airlock/*` in the mirror.
-  Both sides need access to the mirror; a mirror reachable only over SSH needs a
-  fetch/push mode for the queue refs (roadmap).
+- `queue_remote` carries the queue refs over SSH without a shared queue folder;
+  the mirror used by `sync` is still a local path or clone. Syncing the commits
+  themselves over SSH is not implemented yet.
 - The worker polls; it is not an event-driven service.
 - Gitea, GitHub and GitLab are supported today.
 - No PR review automation, labels, or release automation (beyond GitHub

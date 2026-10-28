@@ -45,7 +45,7 @@ type Server struct {
 // New builds a dashboard. An empty token disables authentication (meant for
 // loopback binds only).
 func New(cfg *config.Config, accessToken string) (*Server, error) {
-	store, err := queue.Open(cfg.Queue, cfg.Mirror)
+	store, err := queue.Open(cfg.Queue, cfg.Mirror, cfg.QueueRemote)
 	if err != nil {
 		return nil, err
 	}

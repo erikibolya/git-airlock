@@ -497,7 +497,7 @@ func parseNumber(fs *flag.FlagSet, args []string) (int, error) {
 }
 
 func enqueueAndWait(ctx context.Context, cfg *config.Config, req *queue.Request, wait time.Duration, noWait bool) error {
-	q, err := queue.Open(cfg.Queue, cfg.Mirror)
+	q, err := queue.Open(cfg.Queue, cfg.Mirror, cfg.QueueRemote)
 	if err != nil {
 		return err
 	}
@@ -625,7 +625,7 @@ func cmdStatus(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	q, err := queue.Open(cfg.Queue, cfg.Mirror)
+	q, err := queue.Open(cfg.Queue, cfg.Mirror, cfg.QueueRemote)
 	if err != nil {
 		return err
 	}
@@ -856,7 +856,7 @@ func cmdDoctor(ctx context.Context, args []string) error {
 		check("API auth", func() error { return p.Ping(ctx) })
 	}
 	check("queue", func() error {
-		q, err := queue.Open(cfg.Queue, cfg.Mirror)
+		q, err := queue.Open(cfg.Queue, cfg.Mirror, cfg.QueueRemote)
 		if err != nil {
 			return err
 		}
