@@ -1,0 +1,14 @@
+# Example .airlock.toml. `airlock init` generates this for you.
+repo     = "owner/name"
+remote   = "company"
+mirror   = "~/.airlock/owner-name.git"
+queue    = "~/.airlock/queue"
+provider = "gitea"
+api      = "https://gitea.example.com/api/v1"
+ca       = ""
+base     = "main"
+merge    = "when-green"
+
+# provider = "github"
+# api      = ""                       # defaults to https://api.github.com
+# base     = "main"

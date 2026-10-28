@@ -1,0 +1,236 @@
+# Git Airlock
+
+**Push commits and merge pull requests from a machine that cannot reach your private git remote.**
+
+Git Airlock is a small CLI for a common split-brain setup: the code and the AI
+agent live on one machine (home server, sandbox, air-gapped box), while the
+private Git remote (Gitea, GitHub Enterprise, GitLab) is only reachable from a
+VPN-connected workstation. You do **not** want to connect those networks.
+
+Airlock lets the isolated machine keep working normally:
+
+- it pushes to a **local bare mirror** on the LAN;
+- PR actions are written to a **shared request queue**;
+- a **worker on the trusted workstation** executes them against the real remote
+  and writes the result back.
+
+The isolated machine never talks to the private network, and the API token never
+leaves the workstation.
+
+```
+ isolated machine (agent, sandbox)          trusted workstation (VPN)
+ ─────────────────────────────────          ────────────────────────
+ git push ──► bare mirror ────────────────► sync ──► private remote
+ PR request ─► queue/requests ────────────► worker ─► Gitea / GitHub API
+               queue/results ◄─────────────┘         (create, checks, merge)
+```
+
+## Why not just a VPN / tunnel?
+
+Because that is exactly what you are trying to avoid. A VPN client, a reverse
+SSH tunnel or a Cloudflare tunnel all create a network path from the isolated
+machine to the private network, put credentials on that machine, and need an
+inbound port or a long-lived connection. Airlock is **pull-based**: only the
+trusted workstation reaches out, and only it holds the token.
+
+## Install
+
+Requires Go 1.22+.
+
+```bash
+go install github.com/erikibolya/git-airlock/cmd/airlock@latest
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/erikibolya/git-airlock
+cd git-airlock
+go build -o airlock ./cmd/airlock
+```
+
+## Quick start
+
+### 1. On the isolated machine
+
+From an existing checkout that still has the private remote configured as
+`origin`:
+
+```bash
+cd /path/to/repo
+
+airlock init \
+  --provider gitea \
+  --remote company \
+  --configure-git
+```
+
+`--configure-git` does three things:
+
+1. creates a bare mirror (default `~/.airlock/<owner>-<name>.git`);
+2. renames the private remote `origin` → `company`;
+3. points `origin` at the bare mirror and records the private URL on the mirror.
+
+From now on:
+
+```bash
+git push origin <branch>      # goes to the mirror, no VPN needed
+airlock pr open               # queued; the workstation creates and merges it
+```
+
+### 2. On the workstation (VPN)
+
+Set a token and run the worker once:
+
+```bash
+export GITEA_TOKEN=...        # or AIRLOCK_TOKEN; GitHub can use `gh auth token`
+airlock worker --config /path/to/repo/.airlock.toml
+airlock doctor --config /path/to/repo/.airlock.toml
+```
+
+Install the minute timer:
+
+```bash
+airlock install-task --config /path/to/repo/.airlock.toml
+```
+
+That creates a **Windows Task Scheduler** task (hidden VBS launcher), a
+**systemd user timer**, or a **launchd agent**, depending on the OS.
+
+> The worker must run where the mirror and queue paths resolve. In the common
+> home-lab setup that is WSL/Linux next to the shared folder. Windows workers
+> work too when the share is mounted at matching or configured paths.
+
+## Commands
+
+```text
+airlock init                 create .airlock.toml, optional mirror/remotes
+airlock sync                 fast-forward-only mirror <-> private remote
+airlock pr open              create/reuse a PR and merge when checks pass
+airlock pr open --merge never
+airlock pr open --dry-run
+airlock pr status <n>
+airlock pr merge <n> --when-green
+airlock worker               sync + process the queue once
+airlock worker --loop 1m     run continuously
+airlock doctor               diagnose config, CA, token, VPN, scheduler
+airlock install-task         register the periodic worker
+airlock instructions         print an AGENTS.md snippet
+```
+
+`airlock pr` exit codes: `0` done, `1` failed, `3` still queued (the worker
+keeps retrying; check the result file later instead of resubmitting).
+
+## Configuration
+
+`airlock init` writes `.airlock.toml` in the repository root:
+
+```toml
+repo     = "owner/name"
+remote   = "company"                 # private remote name
+mirror   = "~/.airlock/owner-name.git"
+queue    = "~/.airlock/queue"
+provider = "gitea"                   # gitea | github
+api      = "https://gitea.example.com/api/v1"
+ca       = ""                        # optional PEM bundle
+base     = "main"                    # default PR target
+merge    = "when-green"              # never | when-green | now
+```
+
+The file contains no secrets; it can be committed if the paths are the same on
+all machines. `AIRLOCK_CONFIG` points the CLI at another file.
+
+### Tokens
+
+Resolved in this order, never printed:
+
+1. `AIRLOCK_TOKEN`
+2. `GITEA_TOKEN` / `GITHUB_TOKEN`
+3. `gh auth token` (GitHub only)
+4. userinfo embedded in the private remote URL (Gitea convenience)
+
+For a private CA, set `ca` to a PEM bundle.
+
+## How the sync works
+
+- `git fetch <remote>` into `refs/remotes/<remote>/*`.
+- Every local branch is pushed **only if it fast-forwards the remote**.
+- Every remote branch is fast-forwarded into the mirror **only if the mirror is
+  behind**.
+- Diverged branches are reported and left alone. Nothing is ever force-pushed.
+- Tags are pushed non-forced.
+
+That means the agent can push freely, and a human can still push from the
+workstation; neither side silently destroys the other.
+
+## How merging works
+
+`pr open` (default `--merge when-green`):
+
+1. find an open PR for `head -> base`, or create one;
+2. read the PR's CI status;
+3. merge only on `success`; `pending` leaves the request queued and the worker
+   retries every minute; `failure` finalises the request with an error.
+
+For Gitea, only `(pull_request)` statuses gate the merge. Push runs get
+cancelled by newer pushes and Gitea reports those as failures, so including them
+would block every merge.
+
+For GitHub, the worker combines check runs and commit statuses.
+
+If a repository has no CI at all the request stays pending forever by design;
+use `--merge never` or `--merge now` explicitly.
+
+## Security model
+
+- The isolated machine can push to the mirror and add requests. Nothing else.
+- The API token is resolved on the trusted workstation; requests and results
+  never contain it. (If your private remote URL embeds a git token, that URL
+  lives in `.git/config` as before; use a credential helper if you want it out
+  of the working copy.)
+- The worker validates the action, branches and PR number; the API base and
+  repository come from the config, not from the request.
+- Requests are plain JSON files; the queue directory must be writable by both
+  sides but readable only by trusted users.
+- Merge happens only after green checks (`when-green`); `now` is an explicit
+  human override.
+- The workstation can veto a merge by closing the PR.
+
+Airlock is not a sandbox. If the isolated machine is compromised, it can still
+push malicious commits to the mirror and request PRs. Fast-forward-only sync and
+CI gating limit the damage; review is still your job.
+
+## Scheduling
+
+| OS | Mechanism | Notes |
+| --- | --- | --- |
+| Windows | Task Scheduler + hidden VBS | interactive user task, runs every minute |
+| Linux | systemd user timer | one-shot `airlock worker` |
+| macOS | launchd agent | `StartInterval` |
+
+`airlock install-task --print` shows the generated files without touching your
+system.
+
+## Limitations / roadmap
+
+- One config per repository. Use one scheduler entry per repo.
+- The queue is a shared filesystem; both machines must see the same directory.
+  A future version can carry the queue over `refs/airlock/*` instead.
+- The worker polls; it is not an event-driven service.
+- Gitea and GitHub are supported today; GitLab is a natural next adapter.
+- No PR review automation, labels, or release automation.
+
+## Development
+
+```bash
+go vet ./...
+go test ./...
+go build ./cmd/airlock
+```
+
+The tests cover the queue, fast-forward sync (including divergence), both
+provider adapters, and the worker's pending/merge state machine.
+
+## License
+
+MIT
