@@ -1,0 +1,25 @@
+{{define "content"}}
+<h2>Repositories</h2>
+<p class="muted">This web dashboard is configured from the command line. Pass one
+<code>--config</code> per repository:</p>
+<pre>airlock ui --config /path/to/a/.airlock.toml --config /path/to/b/.airlock.toml</pre>
+<p class="muted">In the desktop app, use this page to add or remove repositories
+with a file picker; the scheduled worker is updated to the same list.</p>
+
+{{if .Repos}}
+<table>
+  <thead><tr><th>repository</th><th>provider</th><th>base</th></tr></thead>
+  <tbody>
+  {{range .Repos}}
+    <tr>
+      <td><a href="{{.Link}}">{{.Repo}}</a></td>
+      <td>{{.Provider}}</td>
+      <td><code>{{.Base}}</code></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No repositories configured.</p>
+{{end}}
+{{end}}

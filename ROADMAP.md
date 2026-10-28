@@ -50,6 +50,8 @@
 - **v1.6** — packaging (Homebrew tap, Scoop bucket, winget manifests) and
   Docker-in-Docker job containers in the integration test (dind service, shared
   workspace volume, act_runner `container.docker_host`).
+- **v1.6.1** — a repositories link in the dashboard header; the desktop app
+  serves the native picker there.
 
 ## Next
 

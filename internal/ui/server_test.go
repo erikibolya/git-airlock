@@ -190,4 +190,10 @@ func TestDashboardListsRepos(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), "manual-result-visible") {
 		t.Fatalf("manual page does not render results: %s", rr.Body.String())
 	}
+
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/repositories", nil))
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "airlock ui --config") {
+		t.Fatalf("repositories page = %d", rr.Code)
+	}
 }
