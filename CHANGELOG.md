@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.1 — 2026-10-28
+
+- Fix the repository picker: **Open dashboard**, **Add config…**, **remove** and
+  **Cancel** used Wails bindings (`window.go`), which do not exist in the
+  server-rendered picker, so they failed with "Native bindings are still
+  loading". The buttons now call small same-origin endpoints under
+  `/_airlock/`.
+
 ## 1.7.0 — 2026-10-28
 
 - Signed in-app updates. Releases publish `latest.json` with the Windows
