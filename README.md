@@ -130,6 +130,7 @@ airlock pr merge <n> --when-green
 airlock worker               sync + process the queue once
 airlock worker --loop 1m     run continuously
 airlock status [--config ...]... [--watch]  terminal dashboard (TUI-lite)
+airlock mcp                  stdio MCP server for agents
 airlock ui [--config ...]...  local web dashboard (one or more repos)
 airlock doctor               diagnose config, CA, token, VPN, scheduler
 airlock install-task         register the periodic worker
@@ -191,6 +192,39 @@ Airlock then requires that token; open the printed URL once and it is stored in
 an HttpOnly cookie. Use this only on a network you trust — the dashboard can
 enqueue merges, though the worker still waits for green checks. `--open` launches
 the browser.
+
+### MCP server
+
+`airlock mcp` speaks the Model Context Protocol over stdio, so an agent can use
+structured tools instead of shell commands. It only writes to the queue; the
+worker still performs the sync and the provider calls:
+
+```bash
+airlock mcp --config /path/to/.airlock.toml
+```
+
+Tools: `airlock_status`, `airlock_sync`, `airlock_pr_open`, `airlock_pr_status`
+and `airlock_pr_merge`. They return the queued request id and the latest result;
+`wait_seconds` controls how long a call waits for the worker (default 55 s,
+`0` returns immediately).
+
+OpenCode configuration (`opencode.json`):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "git-airlock": {
+      "type": "local",
+      "command": ["airlock", "mcp", "--config", "/path/to/.airlock.toml"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Run it on the isolated machine (where the mirror and queue paths resolve), not
+on the VPN-connected worker.
 
 ### Desktop app
 

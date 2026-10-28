@@ -171,7 +171,7 @@ func (w *Worker) handle(ctx context.Context, req queue.Request) queue.Result {
 		return res
 	}
 	switch req.Action {
-	case queue.ActionOpen, queue.ActionStatus, queue.ActionMerge:
+	case queue.ActionOpen, queue.ActionStatus, queue.ActionMerge, queue.ActionSync:
 	default:
 		res.Message = fmt.Sprintf("unknown action %q", req.Action)
 		return res
@@ -207,6 +207,8 @@ func (w *Worker) handle(ctx context.Context, req queue.Request) queue.Result {
 		w.handleStatus(ctx, &res, req.Number)
 	case queue.ActionMerge:
 		w.handleMerge(ctx, &res, req.Number, merge, strategy, deleteBranch)
+	case queue.ActionSync:
+		w.handleSync(ctx, &res)
 	}
 	return res
 }
@@ -330,6 +332,30 @@ func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base s
 		}
 	}
 	w.merge(ctx, res, pr.Number, strategy, head, base, deleteBranch)
+}
+
+func (w *Worker) handleSync(ctx context.Context, res *queue.Result) {
+	report, err := gitutil.Sync(ctx, w.Cfg.Mirror, w.Cfg.Remote)
+	var parts []string
+	if len(report.Pushed) > 0 {
+		parts = append(parts, "pushed "+strings.Join(report.Pushed, ", "))
+	}
+	if len(report.FastForwarded) > 0 {
+		parts = append(parts, "fast-forwarded "+strings.Join(report.FastForwarded, ", "))
+	}
+	if len(report.Diverged) > 0 {
+		parts = append(parts, "DIVERGED "+strings.Join(report.Diverged, ", "))
+	}
+	if err != nil {
+		parts = append(parts, err.Error())
+	} else if len(parts) == 0 {
+		parts = append(parts, "up to date")
+	}
+	res.Message = strings.Join(parts, "; ")
+	res.OK = err == nil
+	if err != nil && provider.Retryable(err) {
+		res.Pending = true
+	}
 }
 
 func (w *Worker) handleStatus(ctx context.Context, res *queue.Result, number int) {

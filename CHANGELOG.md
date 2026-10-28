@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0 — 2026-10-28
+
+- `airlock mcp`: a Model Context Protocol server over stdio with
+  `airlock_status`, `airlock_sync`, `airlock_pr_open`, `airlock_pr_status` and
+  `airlock_pr_merge`. It writes only to the queue; the worker performs the
+  provider calls.
+- New `sync` queue action, so `airlock_sync` (and any future UI) can ask the
+  worker to sync immediately.
+
 ## 1.2.0 — 2026-10-28
 
 - Branch cleanup: `delete_branch = true` in the config, `--delete-branch` on

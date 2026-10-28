@@ -39,16 +39,10 @@
   latest worker result.
 - **v1.2** — optional branch cleanup after a merge (`delete_branch`,
   `--delete-branch`, dashboard checkboxes).
+- **v1.3** — `airlock mcp`: a stdio MCP server exposing status, sync,
+  pr open/status/merge as structured tools for agents.
 
 ## Next
-
-### MCP server
-
-`airlock mcp` would run a stdio MCP server exposing `pr_open`, `pr_status`,
-`pr_merge` and `sync` as tools. It would wrap the same queue as the CLI, so the
-worker model stays unchanged, but agents get structured input/output instead of
-shell quoting. The current interface is the CLI plus the `AGENTS.md` snippet;
-the MCP server is not implemented yet.
 
 ### Sync over SSH
 
