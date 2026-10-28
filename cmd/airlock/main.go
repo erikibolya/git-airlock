@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -73,7 +74,7 @@ func run(ctx context.Context, args []string) error {
 	case "instructions":
 		return cmdInstructions(args[1:])
 	case "version", "--version", "-v":
-		fmt.Printf("git-airlock %s\n", version)
+		fmt.Printf("git-airlock %s\n", versionString())
 		return nil
 	case "help", "--help", "-h":
 		printUsage()
@@ -82,6 +83,16 @@ func run(ctx context.Context, args []string) error {
 		printUsage()
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func versionString() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return version
 }
 
 func printUsage() {
