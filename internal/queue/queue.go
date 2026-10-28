@@ -64,6 +64,7 @@ type Store interface {
 	Wait(ctx context.Context, id string, interval time.Duration, onChange func(*Result)) (*Result, error)
 	ListResults(limit int) ([]Result, error)
 	TailLog(lines int) (string, error)
+	LogPath() string
 	Log(format string, args ...any)
 	Location(id string) string
 }
@@ -242,9 +243,14 @@ func (q *Queue) ListResults(limit int) ([]Result, error) {
 	return out, nil
 }
 
+// LogPath is the worker log file.
+func (q *Queue) LogPath() string {
+	return filepath.Join(q.LogDir(), "worker.log")
+}
+
 // TailLog returns the last lines of the worker log.
 func (q *Queue) TailLog(lines int) (string, error) {
-	return tailFile(filepath.Join(q.LogDir(), "worker.log"), lines)
+	return tailFile(q.LogPath(), lines)
 }
 
 func tailFile(path string, lines int) (string, error) {

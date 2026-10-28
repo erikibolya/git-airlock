@@ -215,6 +215,11 @@ func (g *GitStore) ListResults(limit int) ([]Result, error) {
 	return results, nil
 }
 
+// LogPath is the local worker log file.
+func (g *GitStore) LogPath() string {
+	return g.logPath()
+}
+
 // TailLog returns the last lines of the local worker log.
 func (g *GitStore) TailLog(lines int) (string, error) {
 	path := g.logPath()

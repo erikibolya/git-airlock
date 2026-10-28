@@ -43,7 +43,8 @@ go install github.com/erikibolya/git-airlock/cmd/airlock@latest
 
 Prebuilt archives for Linux (amd64/arm64), macOS (amd64/arm64) and Windows
 (amd64) are on the [Releases](https://github.com/erikibolya/git-airlock/releases)
-page.
+page. The Windows zip includes both `airlock.exe` and the native
+`airlock-desktop.exe`.
 
 Or build from source:
 
@@ -153,6 +154,21 @@ Airlock then requires that token; open the printed URL once and it is stored in
 an HttpOnly cookie. Use this only on a network you trust — the dashboard can
 enqueue merges, though the worker still waits for green checks. `--open` launches
 the browser.
+
+### Native Windows app
+
+`airlock-desktop.exe` is a native Win32 dashboard (no browser) built from this
+repository. It reads the same config and queue as the CLI and shows pending
+requests, results and logs; its buttons enqueue the same requests.
+
+```powershell
+airlock-desktop.exe --config Z:\repos\Acme\Project\.airlock.windows.toml
+```
+
+The config path is remembered after the first launch, so a shortcut can start it
+without arguments. The scheduled worker still performs the sync and the API
+calls; the desktop app never holds the API token. It is Windows-only; the web
+dashboard covers Linux/macOS.
 
 ## Configuration
 
@@ -269,7 +285,8 @@ system.
 - No PR review automation, labels, or release automation (beyond GitHub
   releases of Airlock itself).
 - The web dashboard is loopback-first; LAN exposure requires an access token.
-  The CLI and the queue remain the source of truth; the UI is a convenience.
+  The native desktop app is Windows-only; other platforms use `airlock ui`.
+  The CLI and the queue remain the source of truth; the UIs are conveniences.
 
 ## Development
 
