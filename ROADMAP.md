@@ -37,6 +37,8 @@
 - **v1.1** — merge strategies (`merge`, `squash`, `rebase`) in the config, the
   CLI and the dashboard, used by `auto_pr` too; the desktop tray menu shows the
   latest worker result.
+- **v1.2** — optional branch cleanup after a merge (`delete_branch`,
+  `--delete-branch`, dashboard checkboxes).
 
 ## Next
 
@@ -59,11 +61,6 @@ needs a local path/clone. Add a managed mirror cache so the whole flow can use
 The tray menu and tooltip show the latest result. Native desktop toasts are not
 shipped yet; Windows needs a registered AppUserModelID/shortcut for unpackaged
 apps, which should be added together with the installer shortcut.
-
-### Branch cleanup
-
-Delete the remote branch after a merge (`delete_branch = true`), for providers
-that support it.
 
 ### Labels and review automation
 

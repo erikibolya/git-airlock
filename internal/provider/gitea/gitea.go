@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/erikibolya/git-airlock/internal/provider"
@@ -134,6 +135,14 @@ func (p *Provider) Merge(ctx context.Context, number int, strategy string) error
 		map[string]any{"Do": method}, nil)
 }
 
+func (p *Provider) DeleteBranch(ctx context.Context, branch string) error {
+	err := p.do(ctx, http.MethodDelete, fmt.Sprintf("/repos/%s/branches/%s", p.repo, url.PathEscape(branch)), nil, nil)
+	if provider.IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
 func (p *Provider) do(ctx context.Context, method, path string, in, out any) error {
 	var reader io.Reader
 	if in != nil {
@@ -194,6 +203,7 @@ func (p apiPR) toPR() *provider.PR {
 		State:     p.State,
 		Merged:    p.Merged,
 		Mergeable: p.Mergeable,
+		Head:      p.Head.Ref,
 		HeadSHA:   p.Head.SHA,
 	}
 }

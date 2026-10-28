@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 — 2026-10-28
+
+- Branch cleanup: `delete_branch = true` in the config, `--delete-branch` on
+  `pr open`/`pr merge`, and checkboxes in the manual forms remove the source
+  branch after a successful merge. Cleanup errors are reported but never fail
+  the merge.
+- The provider API now exposes the PR source branch and a branch delete call
+  (Gitea, GitHub, GitLab).
+
 ## 1.1.0 — 2026-10-28
 
 - Merge strategies: `merge_strategy = "merge" | "squash" | "rebase"` in the

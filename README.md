@@ -251,6 +251,7 @@ ca       = ""                        # optional PEM bundle
 base     = "main"                    # default PR target
 merge    = "when-green"              # never | when-green | now
 merge_strategy = "merge"             # merge | squash | rebase
+delete_branch = false                # delete the source branch after merge
 auto_pr  = false                     # open PRs for branches ahead of base
 auto_pr_ignore = ["wip/*"]           # optional branch globs to skip
 ```
@@ -309,6 +310,10 @@ The merge method is `merge_strategy` (or `--strategy` on `pr open` and
 `pr merge`): `merge`, `squash` or `rebase`. Gitea and GitHub support all three;
 GitLab supports `merge` and `squash` (its API cannot merge after an asynchronous
 rebase).
+
+Set `delete_branch = true` (or pass `--delete-branch`) to remove the source
+branch after a successful merge. A failed cleanup is reported in the result but
+does not turn the merge into a failure.
 
 For Gitea, only `(pull_request)` statuses gate the merge. Push runs get
 cancelled by newer pushes and Gitea reports those as failures, so including them

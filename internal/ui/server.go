@@ -453,15 +453,16 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		headSHA = strings.TrimSpace(string(out))
 	}
 	req := &queue.Request{
-		Action:   queue.ActionOpen,
-		Head:     head,
-		HeadSHA:  headSHA,
-		Base:     base,
-		Title:    strings.TrimSpace(r.FormValue("title")),
-		Body:     strings.TrimSpace(r.FormValue("body")),
-		Merge:    merge,
-		Strategy: strategy,
-		DryRun:   r.FormValue("dry_run") != "",
+		Action:       queue.ActionOpen,
+		Head:         head,
+		HeadSHA:      headSHA,
+		Base:         base,
+		Title:        strings.TrimSpace(r.FormValue("title")),
+		Body:         strings.TrimSpace(r.FormValue("body")),
+		Merge:        merge,
+		Strategy:     strategy,
+		DeleteBranch: r.FormValue("delete_branch") != "" || s.cfg.DeleteBranch,
+		DryRun:       r.FormValue("dry_run") != "",
 	}
 	id, err := s.store.Enqueue(req)
 	if err != nil {
@@ -517,7 +518,13 @@ func (s *Server) handleMerge(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, fmt.Sprintf("unknown merge strategy %q", strategy))
 		return
 	}
-	id, err := s.store.Enqueue(&queue.Request{Action: queue.ActionMerge, Number: number, Merge: merge, Strategy: strategy})
+	id, err := s.store.Enqueue(&queue.Request{
+		Action:       queue.ActionMerge,
+		Number:       number,
+		Merge:        merge,
+		Strategy:     strategy,
+		DeleteBranch: r.FormValue("delete_branch") != "" || s.cfg.DeleteBranch,
+	})
 	if err != nil {
 		s.flash(w, r, "queue: "+err.Error())
 		return

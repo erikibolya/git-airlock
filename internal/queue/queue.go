@@ -36,8 +36,10 @@ type Request struct {
 	Merge   string `json:"merge,omitempty"`
 	// Strategy is the provider merge method (merge, squash or rebase).
 	Strategy string `json:"strategy,omitempty"`
-	Number   int    `json:"number,omitempty"`
-	DryRun   bool   `json:"dry_run,omitempty"`
+	// DeleteBranch removes the source branch after a successful merge.
+	DeleteBranch bool `json:"delete_branch,omitempty"`
+	Number       int  `json:"number,omitempty"`
+	DryRun       bool `json:"dry_run,omitempty"`
 }
 
 // Result is written by the worker.
@@ -49,6 +51,7 @@ type Result struct {
 	Message   string `json:"message"`
 	PR        int    `json:"pr,omitempty"`
 	URL       string `json:"url,omitempty"`
+	Head      string `json:"head,omitempty"`
 	State     string `json:"state,omitempty"`
 	Merged    bool   `json:"merged,omitempty"`
 	Mergeable bool   `json:"mergeable,omitempty"`

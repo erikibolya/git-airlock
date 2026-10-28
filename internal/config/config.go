@@ -35,6 +35,8 @@ type Config struct {
 	Merge string `toml:"merge"`
 	// MergeStrategy is the provider merge method: merge, squash or rebase.
 	MergeStrategy string `toml:"merge_strategy"`
+	// DeleteBranch removes the source branch after a successful merge.
+	DeleteBranch bool `toml:"delete_branch"`
 	// AutoPR opens a pull request for every local branch that is ahead of Base.
 	AutoPR bool `toml:"auto_pr"`
 	// AutoPRIgnore lists branch globs (filepath.Match) that AutoPR skips.
@@ -221,6 +223,9 @@ merge = %q
 
 # Merge method used by the provider: merge, squash or rebase.
 merge_strategy = %q
+
+# Delete the source branch after a successful merge.
+delete_branch = false
 
 # Open a pull request automatically for every branch that is ahead of base.
 auto_pr = false

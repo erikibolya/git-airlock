@@ -16,11 +16,12 @@ import (
 )
 
 type fakeProvider struct {
-	pr            *provider.PR
-	checks        provider.Checks
-	createCalls   int
-	mergeCalls    int
-	mergeStrategy string
+	pr              *provider.PR
+	checks          provider.Checks
+	createCalls     int
+	mergeCalls      int
+	mergeStrategy   string
+	deletedBranches []string
 }
 
 func (f *fakeProvider) Name() string               { return "fake" }
@@ -55,6 +56,11 @@ func (f *fakeProvider) CreatePR(context.Context, provider.CreateRequest) (*provi
 	f.pr = &provider.PR{Number: n, URL: fmt.Sprintf("https://example/%d", n), State: "open", Mergeable: true, HeadSHA: "sha-new"}
 	return f.pr, nil
 }
+func (f *fakeProvider) DeleteBranch(_ context.Context, branch string) error {
+	f.deletedBranches = append(f.deletedBranches, branch)
+	return nil
+}
+
 func (f *fakeProvider) GetPR(context.Context, int) (*provider.PR, error) {
 	if f.pr == nil {
 		return nil, errors.New("not found")
@@ -458,5 +464,80 @@ func TestUnknownMergeStrategy(t *testing.T) {
 	}
 	if f.mergeCalls != 0 {
 		t.Fatal("merged with an invalid strategy")
+	}
+}
+
+func TestDeleteBranchAfterMerge(t *testing.T) {
+	ctx := context.Background()
+	f := &fakeProvider{checks: provider.ChecksSuccess}
+	w, q := newWorker(t, f)
+	if _, err := q.Enqueue(&queue.Request{
+		Action: queue.ActionOpen, Head: "feature", Base: "main", Merge: "when-green", DeleteBranch: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.deletedBranches) != 1 || f.deletedBranches[0] != "feature" {
+		t.Fatalf("deleted = %v, want feature", f.deletedBranches)
+	}
+}
+
+func TestDeleteBranchFromConfig(t *testing.T) {
+	ctx := context.Background()
+	f := &fakeProvider{checks: provider.ChecksSuccess}
+	w, q := newWorker(t, f)
+	w.Cfg.DeleteBranch = true
+	if _, err := q.Enqueue(&queue.Request{
+		Action: queue.ActionOpen, Head: "feature", Base: "main", Merge: "when-green",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.deletedBranches) != 1 || f.deletedBranches[0] != "feature" {
+		t.Fatalf("deleted = %v, want feature", f.deletedBranches)
+	}
+}
+
+func TestDeleteBranchOnMergeRequest(t *testing.T) {
+	ctx := context.Background()
+	f := &fakeProvider{
+		pr:     &provider.PR{Number: 3, State: "open", Mergeable: true, Head: "feature"},
+		checks: provider.ChecksSuccess,
+	}
+	w, q := newWorker(t, f)
+	if _, err := q.Enqueue(&queue.Request{
+		Action: queue.ActionMerge, Number: 3, Merge: "now", DeleteBranch: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.deletedBranches) != 1 || f.deletedBranches[0] != "feature" {
+		t.Fatalf("deleted = %v, want feature", f.deletedBranches)
+	}
+}
+
+func TestDryRunNeverDeletesBranch(t *testing.T) {
+	ctx := context.Background()
+	f := &fakeProvider{checks: provider.ChecksSuccess}
+	w, q := newWorker(t, f)
+	if _, err := q.Enqueue(&queue.Request{
+		Action: queue.ActionOpen, Head: "feature", Base: "main", Merge: "when-green", DeleteBranch: true, DryRun: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.deletedBranches) != 0 {
+		t.Fatalf("dry run deleted %v", f.deletedBranches)
+	}
+	if f.createCalls != 0 {
+		t.Fatal("dry run created a PR")
 	}
 }
