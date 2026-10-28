@@ -12,13 +12,13 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/erikibolya/git-airlock/internal/config"
 	"github.com/erikibolya/git-airlock/internal/gitutil"
+	"github.com/erikibolya/git-airlock/internal/proc"
 	"github.com/erikibolya/git-airlock/internal/queue"
 )
 
@@ -197,7 +197,7 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		merge = s.cfg.Merge
 	}
 	headSHA := ""
-	if out, err := exec.Command("git", "-C", s.cfg.Mirror, "rev-parse", "refs/heads/"+head).Output(); err == nil {
+	if out, err := proc.Command("git", "-C", s.cfg.Mirror, "rev-parse", "refs/heads/"+head).Output(); err == nil {
 		headSHA = strings.TrimSpace(string(out))
 	}
 	req := &queue.Request{

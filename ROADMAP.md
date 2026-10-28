@@ -12,8 +12,25 @@
   requests, `HeadSHA` in requests.
 - **v0.6** — remote queue over SSH (`queue_remote`) with a local cache; no
   shared queue folder required.
+- **v0.6.3** — hide console windows for Git children spawned by the Windows GUI
+  (no flashing `cmd` windows, no focus stealing).
 
 ## Next
+
+### MCP server
+
+`airlock mcp` would run a stdio MCP server exposing `pr_open`, `pr_status`,
+`pr_merge` and `sync` as tools. It would wrap the same queue as the CLI, so the
+worker model stays unchanged, but agents get structured input/output instead of
+shell quoting. The current interface is the CLI plus the `AGENTS.md` snippet;
+the MCP server is not implemented yet.
+
+### Cross-platform desktop
+
+The native Win32 dashboard is Windows-only. A Wails wrapper around the existing
+web dashboard (WebView2 on Windows, WebKitGTK on Linux) would give one GUI
+codebase for Windows/Linux/macOS. Fyne is an alternative with a different
+widget set. The `airlock ui` web dashboard already works everywhere.
 
 ### Sync over SSH
 

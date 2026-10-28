@@ -23,6 +23,7 @@ import (
 
 	"github.com/erikibolya/git-airlock/internal/config"
 	"github.com/erikibolya/git-airlock/internal/gitutil"
+	"github.com/erikibolya/git-airlock/internal/proc"
 	"github.com/erikibolya/git-airlock/internal/queue"
 )
 
@@ -274,7 +275,7 @@ func (a *app) openPR() {
 					}
 					merge := merges[mergeCombo.CurrentIndex()]
 					headSHA := ""
-					if out, err := exec.Command("git", "-C", a.cfg.Mirror, "rev-parse", "refs/heads/"+head).Output(); err == nil {
+					if out, err := proc.Command("git", "-C", a.cfg.Mirror, "rev-parse", "refs/heads/"+head).Output(); err == nil {
 						headSHA = strings.TrimSpace(string(out))
 					}
 					id, err := a.store.Enqueue(&queue.Request{

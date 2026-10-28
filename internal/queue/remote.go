@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erikibolya/git-airlock/internal/proc"
 	"hash/fnv"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -278,7 +278,7 @@ func (r *RemoteStore) initCache() error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "init", "--bare", r.cache)
+	cmd := proc.CommandContext(ctx, "git", "init", "--bare", r.cache)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git init --bare: %w: %s", err, strings.TrimSpace(string(out)))
@@ -298,7 +298,7 @@ func (r *RemoteStore) hash(req *Request) (string, error) {
 func (r *RemoteStore) local(stdin string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", r.cache}, args...)...)
+	cmd := proc.CommandContext(ctx, "git", append([]string{"-C", r.cache}, args...)...)
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
 	}
@@ -316,7 +316,7 @@ func (r *RemoteStore) local(stdin string, args ...string) (string, error) {
 func (r *RemoteStore) net(args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", r.cache}, args...)...)
+	cmd := proc.CommandContext(ctx, "git", append([]string{"-C", r.cache}, args...)...)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))
