@@ -31,6 +31,7 @@ import (
 	"github.com/erikibolya/git-airlock/internal/provider/github"
 	"github.com/erikibolya/git-airlock/internal/provider/gitlab"
 	"github.com/erikibolya/git-airlock/internal/queue"
+	"github.com/erikibolya/git-airlock/internal/reposync"
 	"github.com/erikibolya/git-airlock/internal/ui"
 	"github.com/erikibolya/git-airlock/internal/worker"
 )
@@ -163,6 +164,9 @@ func loadConfig(path string) (*config.Config, string, error) {
 }
 
 func privateRemoteURL(cfg *config.Config) string {
+	if cfg.RemoteURL != "" {
+		return cfg.RemoteURL
+	}
 	if u, err := gitutil.RemoteURL(cfg.Mirror, cfg.Remote); err == nil {
 		return u
 	}
@@ -335,7 +339,7 @@ func cmdSync(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	report, err := gitutil.Sync(ctx, cfg.Mirror, cfg.Remote)
+	report, err := reposync.Sync(ctx, cfg)
 	printSyncReport(report)
 	if errors.Is(err, gitutil.ErrDiverged) {
 		return &exitError{code: 1, msg: "branches diverged; rebase or merge locally first"}
@@ -607,7 +611,7 @@ func cmdWorker(ctx context.Context, args []string) error {
 	runAll := func() {
 		for _, r := range repos {
 			if !*noSync {
-				report, err := gitutil.Sync(ctx, r.cfg.Mirror, r.cfg.Remote)
+				report, err := reposync.Sync(ctx, r.cfg)
 				printSyncReport(report)
 				if err != nil {
 					r.w.Q.Log("sync failed: %v", err)
@@ -956,6 +960,12 @@ func cmdDoctor(ctx context.Context, args []string) error {
 	}
 
 	check("mirror exists", func() error {
+		if cfg.MirrorRemote != "" {
+			if _, err := os.Stat(cfg.Mirror); os.IsNotExist(err) {
+				fmt.Println("       (the cache is created by the first sync)")
+				return nil
+			}
+		}
 		cmd := proc.CommandContext(ctx, "git", "-C", cfg.Mirror, "rev-parse", "--is-bare-repository")
 		out, err := cmd.Output()
 		if err != nil {
@@ -966,9 +976,26 @@ func cmdDoctor(ctx context.Context, args []string) error {
 		}
 		return nil
 	})
+	if cfg.MirrorRemote != "" {
+		check("mirror_remote reachable", func() error {
+			cmdCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			cmd := proc.CommandContext(cmdCtx, "git", "ls-remote", cfg.MirrorRemote, "HEAD")
+			cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+			return cmd.Run()
+		})
+	}
 	check("private remote reachable", func() error {
 		cmdCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
+		if cfg.MirrorRemote != "" {
+			if cfg.RemoteURL == "" {
+				return errors.New("set remote_url for the SSH-only setup")
+			}
+			cmd := proc.CommandContext(cmdCtx, "git", "ls-remote", cfg.RemoteURL, "HEAD")
+			cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+			return cmd.Run()
+		}
 		cmd := proc.CommandContext(cmdCtx, "git", "-C", cfg.Mirror, "ls-remote", cfg.Remote, "HEAD")
 		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 		return cmd.Run()

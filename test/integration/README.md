@@ -6,9 +6,11 @@ End-to-end test of the air-gap flow with a real Gitea:
 2. The isolated side clones the bare mirror, pushes a branch and queues
    `pr open` (its config points its API at a dead address).
 3. The worker syncs the mirror to Gitea, opens the PR and waits for checks.
-4. The script sets a `pull_request` commit status to success (simulated CI).
+4. A real Gitea Actions `act_runner` (host mode) runs
+   `.gitea/workflows/ci.yml` for the `pull_request` event.
 5. The worker merges with `merge_strategy = "squash"` and `delete_branch = true`.
-6. The test asserts the PR is merged, the source branch is gone and `main` moved.
+6. The test asserts the workflow status is success, the PR is merged, the source
+   branch is gone and `main` moved.
 
 Run it with Docker (Compose v2):
 

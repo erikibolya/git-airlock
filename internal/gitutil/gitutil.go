@@ -286,6 +286,198 @@ func Sync(ctx context.Context, mirror, remote string) (SyncReport, error) {
 	return report, nil
 }
 
+// SyncOverSSH bridges a local cache between an SSH-reachable mirror ("holly")
+// and the private remote. It creates the cache directory when missing and
+// never force-pushes: diverged branches are reported in the result.
+func SyncOverSSH(ctx context.Context, dir, mirrorRemote, remoteURL, remoteName string) (SyncReport, error) {
+	var report SyncReport
+	if mirrorRemote == "" {
+		return report, errors.New("mirror_remote is empty")
+	}
+	if remoteName == "" {
+		remoteName = "company"
+	}
+	if err := ensureCache(ctx, dir); err != nil {
+		return report, err
+	}
+	if err := ensureRemote(ctx, dir, "holly", mirrorRemote); err != nil {
+		return report, err
+	}
+	if remoteURL != "" {
+		if err := ensureRemote(ctx, dir, remoteName, remoteURL); err != nil {
+			return report, err
+		}
+	} else if !RemoteExists(dir, remoteName) {
+		return report, fmt.Errorf("remote %q is not configured; set remote_url in the config", remoteName)
+	}
+
+	remotes := []string{"holly", remoteName}
+	for _, r := range remotes {
+		fetchCtx, cancel := context.WithTimeout(ctx, networkTimeout)
+		_, err := run(fetchCtx, dir, networkTimeout, true, "fetch", "--prune", "--tags", r,
+			"+refs/heads/*:refs/remotes/"+r+"/*")
+		cancel()
+		if err != nil {
+			return report, fmt.Errorf("fetch %s: %w", r, err)
+		}
+	}
+
+	branches := map[string]bool{}
+	for _, r := range remotes {
+		out, err := run(ctx, dir, localTimeout, false, "for-each-ref", "--format=%(refname)", "refs/remotes/"+r)
+		if err != nil {
+			return report, err
+		}
+		for _, ref := range strings.Split(out, "\n") {
+			ref = strings.TrimSpace(ref)
+			if ref == "" || strings.HasSuffix(ref, "/HEAD") {
+				continue
+			}
+			branches[strings.TrimPrefix(ref, "refs/remotes/"+r+"/")] = true
+		}
+	}
+	out, err := run(ctx, dir, localTimeout, false, "for-each-ref", "--format=%(refname)", "refs/heads")
+	if err != nil {
+		return report, err
+	}
+	for _, ref := range strings.Split(out, "\n") {
+		ref = strings.TrimSpace(ref)
+		if ref != "" {
+			branches[strings.TrimPrefix(ref, "refs/heads/")] = true
+		}
+	}
+	sorted := make([]string, 0, len(branches))
+	for b := range branches {
+		sorted = append(sorted, b)
+	}
+	sort.Strings(sorted)
+
+	for _, branch := range sorted {
+		local, _ := revParse(ctx, dir, "refs/heads/"+branch)
+		tips := map[string]string{}
+		for _, r := range remotes {
+			sha, _ := revParse(ctx, dir, "refs/remotes/"+r+"/"+branch)
+			if sha != "" {
+				tips[r] = sha
+			}
+		}
+		target := local
+		diverged := false
+		for _, r := range remotes {
+			sha := tips[r]
+			if sha == "" {
+				continue
+			}
+			if target == "" {
+				target = sha
+				continue
+			}
+			if target == sha {
+				continue
+			}
+			ancestor, err := isAncestor(ctx, dir, target, sha)
+			if err != nil {
+				return report, err
+			}
+			if ancestor {
+				target = sha
+				continue
+			}
+			ancestor, err = isAncestor(ctx, dir, sha, target)
+			if err != nil {
+				return report, err
+			}
+			if ancestor {
+				continue
+			}
+			report.Diverged = append(report.Diverged, branch+" ("+r+")")
+			diverged = true
+			break
+		}
+		if diverged {
+			continue
+		}
+		if target != "" && target != local {
+			old := local
+			if old == "" {
+				if _, err := run(ctx, dir, localTimeout, false, "update-ref", "refs/heads/"+branch, target); err != nil {
+					return report, err
+				}
+			} else if _, err := run(ctx, dir, localTimeout, false, "update-ref", "refs/heads/"+branch, target, old); err != nil {
+				return report, err
+			}
+			report.FastForwarded = append(report.FastForwarded, branch)
+			local = target
+		}
+		if local == "" {
+			continue
+		}
+		for _, r := range remotes {
+			sha := tips[r]
+			if sha == local {
+				continue
+			}
+			if sha != "" {
+				ancestor, err := isAncestor(ctx, dir, sha, local)
+				if err != nil {
+					return report, err
+				}
+				if !ancestor {
+					report.Diverged = append(report.Diverged, branch+" ("+r+")")
+					continue
+				}
+			}
+			if err := push(ctx, dir, r, "refs/heads/"+branch, branch); err != nil {
+				return report, err
+			}
+			report.Pushed = append(report.Pushed, branch+" -> "+r)
+		}
+	}
+
+	for _, r := range remotes {
+		pushCtx, cancel := context.WithTimeout(ctx, networkTimeout)
+		_, err := run(pushCtx, dir, networkTimeout, true, "push", "--tags", r)
+		cancel()
+		if err != nil {
+			report.Warnings = append(report.Warnings, fmt.Sprintf("tags -> %s: %v", r, err))
+		}
+	}
+	if len(report.Diverged) > 0 {
+		return report, ErrDiverged
+	}
+	return report, nil
+}
+
+func ensureCache(ctx context.Context, dir string) error {
+	if dir == "" {
+		return errors.New("mirror is empty")
+	}
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+			return err
+		}
+		_, err := run(ctx, "", localTimeout, false, "init", "--bare", dir)
+		return err
+	}
+	bare, err := run(ctx, dir, localTimeout, false, "rev-parse", "--is-bare-repository")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(bare) != "true" {
+		return fmt.Errorf("%s is not a bare repository", dir)
+	}
+	return nil
+}
+
+func ensureRemote(ctx context.Context, dir, name, rawURL string) error {
+	if RemoteExists(dir, name) {
+		_, err := run(ctx, dir, localTimeout, false, "remote", "set-url", name, rawURL)
+		return err
+	}
+	_, err := run(ctx, dir, localTimeout, false, "remote", "add", name, rawURL)
+	return err
+}
+
 func push(ctx context.Context, dir, remote, ref, branch string) error {
 	pushCtx, cancel := context.WithTimeout(ctx, networkTimeout)
 	defer cancel()

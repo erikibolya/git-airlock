@@ -7,8 +7,18 @@ services:
       GITEA__server__ROOT_URL: "http://gitea:3000/"
       GITEA__server__HTTP_PORT: "3000"
       GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__actions__ENABLED: "true"
     ports:
       - "3000:3000"
+  runner:
+    image: gitea/act_runner:0.2.11
+    environment:
+      GITEA_INSTANCE_URL: "http://gitea:3000"
+      GITEA_RUNNER_REGISTRATION_TOKEN: "${RUNNER_TOKEN}"
+      GITEA_RUNNER_NAME: "integration"
+      GITEA_RUNNER_LABELS: "ubuntu-latest:host"
+    depends_on:
+      - gitea
   tool:
     build:
       context: ../..
@@ -18,6 +28,6 @@ services:
     environment:
       GITEA_URL: "http://gitea:3000"
     volumes:
-      - ./work:/work
+      - ./workspace:/work
       - ./:/run/airlock:ro
     working_dir: /work

@@ -51,6 +51,24 @@ CFG
 # The isolated machine only pushes to the mirror and queues a request.
 git clone mirror.git repo
 cd repo
+mkdir -p .gitea/workflows
+cat > .gitea/workflows/ci.yml <<'YAML'
+name: CI
+on:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "act_runner integration OK"
+        shell: sh
+YAML
+git add .gitea/workflows/ci.yml
+git commit -m "ci: integration workflow"
+git push origin main
+# Put the workflow on the default branch before opening the PR.
+airlock worker --config /work/worker.toml >/dev/null 2>&1 || true
+
 echo "integration test $(date -u +%s)" >> README.md
 git checkout -b feature
 git commit -am "feature: integration test"
@@ -79,13 +97,15 @@ done
 SHA=$(curl -fsS -H "${AUTH}" "${API}/pulls/${PR}" | jq -r '.head.sha')
 [ -n "${SHA}" ] && [ "${SHA}" != "null" ] || fail "cannot read the PR head SHA"
 
-# Simulate CI: the context must contain pull_request so the worker gates on it.
-curl -fsS -X POST -H "${AUTH}" -H "Content-Type: application/json" \
-  -d '{"state":"pending","context":"ci/test (pull_request)"}' \
-  "${API}/statuses/${SHA}" >/dev/null
-curl -fsS -X POST -H "${AUTH}" -H "Content-Type: application/json" \
-  -d '{"state":"success","context":"ci/test (pull_request)"}' \
-  "${API}/statuses/${SHA}" >/dev/null
+# Wait for the real act_runner workflow to report success.
+STATE=""
+for _ in $(seq 1 90); do
+  STATE=$(curl -fsS -H "${AUTH}" "${API}/commits/${SHA}/status" | jq -r '.state // empty')
+  [ "${STATE}" = "success" ] && break
+  [ "${STATE}" = "failure" ] && fail "CI failed"
+  sleep 2
+done
+[ "${STATE}" = "success" ] || fail "CI did not succeed (state=${STATE:-none})"
 
 MERGED=""
 for _ in $(seq 1 20); do

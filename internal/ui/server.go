@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"github.com/erikibolya/git-airlock/internal/config"
-	"github.com/erikibolya/git-airlock/internal/gitutil"
 	"github.com/erikibolya/git-airlock/internal/proc"
 	"github.com/erikibolya/git-airlock/internal/provider"
 	"github.com/erikibolya/git-airlock/internal/queue"
+	"github.com/erikibolya/git-airlock/internal/reposync"
 )
 
 //go:embed templates/*.html
@@ -544,7 +544,7 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 	if !s.formOK(w, r) {
 		return
 	}
-	report, err := gitutil.Sync(r.Context(), s.cfg.Mirror, s.cfg.Remote)
+	report, err := reposync.Sync(r.Context(), s.cfg)
 	var parts []string
 	if len(report.Pushed) > 0 {
 		parts = append(parts, "pushed "+strings.Join(report.Pushed, ", "))

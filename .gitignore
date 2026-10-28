@@ -17,4 +17,4 @@
 /installer/files/LICENSE
 
 # Docker integration test workspace
-/test/integration/work/
+/test/integration/workspace/

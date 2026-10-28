@@ -171,3 +171,77 @@ func TestBranchesAhead(t *testing.T) {
 		t.Fatalf("sha = %q", got[0].SHA)
 	}
 }
+
+func TestSyncOverSSH(t *testing.T) {
+	ctx := context.Background()
+	base := t.TempDir()
+	holly := filepath.Join(base, "holly.git")
+	company := filepath.Join(base, "company.git")
+	cache := filepath.Join(base, "cache.git")
+	gitCmd(t, "", "init", "--bare", holly)
+	gitCmd(t, holly, "symbolic-ref", "HEAD", "refs/heads/main")
+	gitCmd(t, "", "init", "--bare", company)
+	gitCmd(t, company, "symbolic-ref", "HEAD", "refs/heads/main")
+
+	work := filepath.Join(base, "work")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd(t, work, "init")
+	gitCmd(t, work, "checkout", "-b", "main")
+	commitFile(t, work, "a.txt", "a", "initial")
+	gitCmd(t, work, "remote", "add", "holly", holly)
+	gitCmd(t, work, "push", "holly", "main")
+	initial := gitCmd(t, work, "rev-parse", "HEAD")
+
+	report, err := SyncOverSSH(ctx, cache, holly, company, "company")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := gitCmd(t, company, "rev-parse", "refs/heads/main"); got != initial {
+		t.Fatalf("company main = %s, want %s (report %+v)", got, initial, report)
+	}
+	if got := gitCmd(t, cache, "rev-parse", "refs/heads/main"); got != initial {
+		t.Fatalf("cache main = %s", got)
+	}
+
+	// A branch created only on the private remote is bridged back to the mirror.
+	other := filepath.Join(base, "other")
+	gitCmd(t, "", "clone", company, other)
+	gitCmd(t, other, "checkout", "-b", "extra")
+	commitFile(t, other, "b.txt", "b", "extra work")
+	gitCmd(t, other, "push", "origin", "extra")
+	if _, err := SyncOverSSH(ctx, cache, holly, company, "company"); err != nil {
+		t.Fatal(err)
+	}
+	if got := gitCmd(t, holly, "rev-parse", "refs/heads/extra"); got == "" {
+		t.Fatal("extra was not bridged to holly")
+	}
+
+	// A commit pushed to company fast-forwards the mirror.
+	gitCmd(t, other, "checkout", "main")
+	commitFile(t, other, "c.txt", "c", "company ahead")
+	gitCmd(t, other, "push", "origin", "main")
+	companyTip := gitCmd(t, other, "rev-parse", "HEAD")
+	if _, err := SyncOverSSH(ctx, cache, holly, company, "company"); err != nil {
+		t.Fatal(err)
+	}
+	if got := gitCmd(t, holly, "rev-parse", "refs/heads/main"); got != companyTip {
+		t.Fatalf("holly main = %s, want %s", got, companyTip)
+	}
+
+	// Divergence is reported, not force-pushed.
+	hollyWork := filepath.Join(base, "hollywork")
+	gitCmd(t, "", "clone", holly, hollyWork)
+	gitCmd(t, hollyWork, "checkout", "main")
+	commitFile(t, hollyWork, "d.txt", "d", "holly ahead")
+	gitCmd(t, hollyWork, "push", "origin", "main")
+	gitCmd(t, other, "checkout", "main")
+	commitFile(t, other, "e.txt", "e", "company ahead again")
+	gitCmd(t, other, "push", "origin", "main")
+
+	report, err = SyncOverSSH(ctx, cache, holly, company, "company")
+	if !errors.Is(err, ErrDiverged) || len(report.Diverged) == 0 {
+		t.Fatalf("want divergence, got %v %+v", err, report)
+	}
+}
