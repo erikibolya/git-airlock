@@ -198,19 +198,20 @@ func (w *Worker) handle(ctx context.Context, req queue.Request) queue.Result {
 		res.Message = fmt.Sprintf("%s: unknown merge strategy %q", req.Action, req.Strategy)
 		return res
 	}
+	deleteBranch := (req.DeleteBranch || w.Cfg.DeleteBranch) && !req.DryRun
 
 	switch req.Action {
 	case queue.ActionOpen:
-		w.handleOpen(ctx, &res, head, base, req, merge, strategy)
+		w.handleOpen(ctx, &res, head, base, req, merge, strategy, deleteBranch)
 	case queue.ActionStatus:
 		w.handleStatus(ctx, &res, req.Number)
 	case queue.ActionMerge:
-		w.handleMerge(ctx, &res, req.Number, merge, strategy)
+		w.handleMerge(ctx, &res, req.Number, merge, strategy, deleteBranch)
 	}
 	return res
 }
 
-func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base string, req queue.Request, merge, strategy string) {
+func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base string, req queue.Request, merge, strategy string, deleteBranch bool) {
 	if head == "" {
 		fail(res, errors.New("open: head branch is empty"))
 		return
@@ -231,6 +232,9 @@ func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base s
 		applyPR(res, &provider.PR{State: "merged", Merged: true, HeadSHA: req.HeadSHA})
 		res.OK = true
 		res.Message = fmt.Sprintf("commit %.8s is already on %s; nothing to merge", req.HeadSHA, base)
+		if deleteBranch {
+			w.cleanupBranch(ctx, res, head, base)
+		}
 		return
 	}
 
@@ -300,6 +304,9 @@ func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base s
 	if res.Merged {
 		res.OK = true
 		res.Message = fmt.Sprintf("PR #%d already merged", pr.Number)
+		if deleteBranch {
+			w.cleanupBranch(ctx, res, head, base)
+		}
 		return
 	}
 	if res.State == "closed" {
@@ -322,7 +329,7 @@ func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base s
 			return
 		}
 	}
-	w.merge(ctx, res, pr.Number, strategy)
+	w.merge(ctx, res, pr.Number, strategy, head, base, deleteBranch)
 }
 
 func (w *Worker) handleStatus(ctx context.Context, res *queue.Result, number int) {
@@ -338,7 +345,7 @@ func (w *Worker) handleStatus(ctx context.Context, res *queue.Result, number int
 	res.Message = fmt.Sprintf("PR #%d state=%s merged=%v checks=%s", number, res.State, res.Merged, checksLabel(res.Checks))
 }
 
-func (w *Worker) handleMerge(ctx context.Context, res *queue.Result, number int, merge, strategy string) {
+func (w *Worker) handleMerge(ctx context.Context, res *queue.Result, number int, merge, strategy string, deleteBranch bool) {
 	if number <= 0 {
 		fail(res, errors.New("merge: PR number is required"))
 		return
@@ -354,6 +361,9 @@ func (w *Worker) handleMerge(ctx context.Context, res *queue.Result, number int,
 	if res.Merged {
 		res.OK = true
 		res.Message = fmt.Sprintf("PR #%d already merged", number)
+		if deleteBranch {
+			w.cleanupBranch(ctx, res, res.Head, w.Cfg.Base)
+		}
 		return
 	}
 	if res.State == "closed" {
@@ -371,16 +381,19 @@ func (w *Worker) handleMerge(ctx context.Context, res *queue.Result, number int,
 			return
 		}
 	}
-	w.merge(ctx, res, number, strategy)
+	w.merge(ctx, res, number, strategy, res.Head, w.Cfg.Base, deleteBranch)
 }
 
-func (w *Worker) merge(ctx context.Context, res *queue.Result, number int, strategy string) {
+func (w *Worker) merge(ctx context.Context, res *queue.Result, number int, strategy, head, base string, deleteBranch bool) {
 	if err := w.P.Merge(ctx, number, strategy); err != nil {
 		// A concurrent merge may have won the race; re-read before failing.
 		if pr, getErr := w.P.GetPR(ctx, number); getErr == nil && pr.Merged {
 			applyPR(res, pr)
 			res.OK = true
 			res.Message = fmt.Sprintf("PR #%d merged", number)
+			if deleteBranch {
+				w.cleanupBranch(ctx, res, head, base)
+			}
 			return
 		}
 		fail(res, err)
@@ -395,6 +408,9 @@ func (w *Worker) merge(ctx context.Context, res *queue.Result, number int, strat
 	if pr.Merged {
 		res.OK = true
 		res.Message = fmt.Sprintf("PR #%d merged", number)
+		if deleteBranch {
+			w.cleanupBranch(ctx, res, head, base)
+		}
 		return
 	}
 	res.Pending = true
@@ -434,6 +450,20 @@ func applyPR(res *queue.Result, pr *provider.PR) {
 	res.State = pr.State
 	res.Merged = pr.Merged
 	res.Mergeable = pr.Mergeable
+	res.Head = pr.Head
+}
+
+// cleanupBranch removes the source branch after a confirmed merge. Errors are
+// reported in the result but never turn a successful merge into a failure.
+func (w *Worker) cleanupBranch(ctx context.Context, res *queue.Result, head, base string) {
+	if head == "" || head == base {
+		return
+	}
+	if err := w.P.DeleteBranch(ctx, head); err != nil {
+		res.Message += fmt.Sprintf(" (branch %s not deleted: %v)", head, err)
+		return
+	}
+	res.Message += fmt.Sprintf("; branch %s deleted", head)
 }
 
 func fail(res *queue.Result, err error) {

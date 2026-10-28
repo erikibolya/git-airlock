@@ -38,6 +38,9 @@ merge = "when-green"
 # Merge method: merge, squash or rebase (GitLab supports merge and squash).
 merge_strategy = "merge"
 
+# Delete the source branch after a successful merge.
+delete_branch = false
+
 # Open a pull request automatically for every local branch that is ahead of base.
 auto_pr = false
 

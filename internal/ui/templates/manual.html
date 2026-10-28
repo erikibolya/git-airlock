@@ -32,6 +32,7 @@
       <input id="title" name="title" placeholder="optional; defaults to the last commit">
       <label for="body">Body</label>
       <textarea id="body" name="body" placeholder="optional"></textarea>
+      <label><input type="checkbox" name="delete_branch" {{if .Config.DeleteBranch}}checked{{end}}> delete branch after merge</label>
       <label><input type="checkbox" name="dry_run"> dry run only</label>
       <button type="submit">Queue open PR</button>
     </form>
@@ -57,6 +58,7 @@
         <option value="squash" {{if eq .Config.MergeStrategy "squash"}}selected{{end}}>squash</option>
         <option value="rebase" {{if eq .Config.MergeStrategy "rebase"}}selected{{end}}>rebase</option>
       </select>
+      <label><input type="checkbox" name="delete_branch" {{if .Config.DeleteBranch}}checked{{end}}> delete branch after merge</label>
       <label><input type="checkbox" name="when_green" checked> merge only when checks are green</label>
       <button type="submit">Queue merge</button>
     </form>

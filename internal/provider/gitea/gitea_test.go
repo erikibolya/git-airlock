@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/erikibolya/git-airlock/internal/provider"
@@ -131,5 +132,21 @@ func TestMergeStrategyBody(t *testing.T) {
 	}
 	if err := p.Merge(context.Background(), 5, "bogus"); err == nil {
 		t.Fatal("accepted an unknown strategy")
+	}
+}
+
+func TestDeleteBranch(t *testing.T) {
+	var method, path string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path = r.Method, r.URL.EscapedPath()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	p := New(srv.URL+"/api/v1", "o/r", "token", srv.Client())
+	if err := p.DeleteBranch(context.Background(), "feature/x"); err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodDelete || !strings.Contains(path, "feature") {
+		t.Fatalf("method=%s path=%s", method, path)
 	}
 }

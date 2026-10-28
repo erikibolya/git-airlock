@@ -154,6 +154,14 @@ func (p *Provider) Merge(ctx context.Context, number int, strategy string) error
 		map[string]any{"merge_method": method}, nil)
 }
 
+func (p *Provider) DeleteBranch(ctx context.Context, branch string) error {
+	err := p.do(ctx, http.MethodDelete, fmt.Sprintf("/repos/%s/git/refs/heads/%s", p.repo, branch), nil, nil)
+	if provider.IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
 func (p *Provider) do(ctx context.Context, method, path string, in, out any) error {
 	var reader io.Reader
 	if in != nil {

@@ -164,6 +164,14 @@ func (p *Provider) Merge(ctx context.Context, number int, strategy string) error
 	return p.do(ctx, http.MethodPut, fmt.Sprintf("%s/%d/merge", p.mrPath(), number), body, nil)
 }
 
+func (p *Provider) DeleteBranch(ctx context.Context, branch string) error {
+	err := p.do(ctx, http.MethodDelete, "/projects/"+p.project+"/repository/branches/"+url.PathEscape(branch), nil, nil)
+	if provider.IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
 func (p *Provider) mrPath() string {
 	return "/projects/" + p.project + "/merge_requests"
 }

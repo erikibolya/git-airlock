@@ -121,7 +121,7 @@ Usage:
   airlock init [--provider gitea|github] [--repo owner/name] [--remote company]
                [--api URL] [--ca PEM] [--base BRANCH] [--mirror PATH]
                [--queue PATH] [--merge MODE] [--strategy METHOD]
-               [--configure-git] [--force]
+               [--delete-branch] [--configure-git] [--force]
   airlock sync [--config PATH]
   airlock pr open   [--head BRANCH] [--base BRANCH] [--title TEXT] [--body TEXT]
                     [--merge never|when-green|now] [--strategy merge|squash|rebase]
@@ -204,6 +204,7 @@ func cmdInit(args []string) error {
 	queueFlag := fs.String("queue", "", "shared queue directory")
 	mergeFlag := fs.String("merge", "when-green", "default merge policy")
 	strategyFlag := fs.String("strategy", "merge", "merge method: merge, squash or rebase")
+	deleteBranch := fs.Bool("delete-branch", false, "delete the source branch after merging")
 	configure := fs.Bool("configure-git", false, "create the mirror and repoint git remotes")
 	force := fs.Bool("force", false, "overwrite an existing config")
 	if err := fs.Parse(args); err != nil {
@@ -256,6 +257,7 @@ func cmdInit(args []string) error {
 		Base:          *baseFlag,
 		Merge:         *mergeFlag,
 		MergeStrategy: *strategyFlag,
+		DeleteBranch:  *deleteBranch,
 	}
 	if err := cfg.Validate(); err != nil {
 		return err
@@ -380,6 +382,7 @@ func cmdPROpen(ctx context.Context, args []string) error {
 	bodyFlag := fs.String("body", "", "PR body")
 	mergeFlag := fs.String("merge", "", "never, when-green or now")
 	strategyFlag := fs.String("strategy", "", "merge method: merge, squash or rebase")
+	deleteBranch := fs.Bool("delete-branch", false, "delete the source branch after merging")
 	dryRun := fs.Bool("dry-run", false, "validate without creating anything")
 	wait := fs.Duration("wait", 2*time.Minute, "how long to wait for the worker")
 	noWait := fs.Bool("no-wait", false, "queue and exit immediately")
@@ -429,15 +432,16 @@ func cmdPROpen(ctx context.Context, args []string) error {
 		}
 	}
 	req := &queue.Request{
-		Action:   queue.ActionOpen,
-		Head:     head,
-		HeadSHA:  headSHA,
-		Base:     base,
-		Title:    title,
-		Body:     *bodyFlag,
-		Merge:    merge,
-		Strategy: *strategyFlag,
-		DryRun:   *dryRun,
+		Action:       queue.ActionOpen,
+		Head:         head,
+		HeadSHA:      headSHA,
+		Base:         base,
+		Title:        title,
+		Body:         *bodyFlag,
+		Merge:        merge,
+		Strategy:     *strategyFlag,
+		DeleteBranch: *deleteBranch,
+		DryRun:       *dryRun,
 	}
 	return enqueueAndWait(ctx, cfg, req, *wait, *noWait)
 }
@@ -466,6 +470,7 @@ func cmdPRMerge(ctx context.Context, args []string) error {
 	configPath := fs.String("config", "", "config path")
 	whenGreen := fs.Bool("when-green", false, "wait for green checks first")
 	strategyFlag := fs.String("strategy", "", "merge method: merge, squash or rebase")
+	deleteBranch := fs.Bool("delete-branch", false, "delete the source branch after merging")
 	wait := fs.Duration("wait", 2*time.Minute, "how long to wait for the worker")
 	noWait := fs.Bool("no-wait", false, "queue and exit immediately")
 	number, err := parseNumber(fs, args)
@@ -485,7 +490,7 @@ func cmdPRMerge(ctx context.Context, args []string) error {
 			return fmt.Errorf("--strategy must be merge, squash or rebase, got %q", *strategyFlag)
 		}
 	}
-	req := &queue.Request{Action: queue.ActionMerge, Number: number, Merge: merge, Strategy: *strategyFlag}
+	req := &queue.Request{Action: queue.ActionMerge, Number: number, Merge: merge, Strategy: *strategyFlag, DeleteBranch: *deleteBranch}
 	return enqueueAndWait(ctx, cfg, req, *wait, *noWait)
 }
 

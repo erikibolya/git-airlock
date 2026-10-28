@@ -23,7 +23,9 @@ type PR struct {
 	State     string
 	Merged    bool
 	Mergeable bool
-	HeadSHA   string
+	// Head is the source branch name; used for branch cleanup after merging.
+	Head    string
+	HeadSHA string
 }
 
 // Checks is the aggregated CI state of a PR head.
@@ -76,6 +78,8 @@ type Provider interface {
 	GetPR(ctx context.Context, number int) (*PR, error)
 	Checks(ctx context.Context, pr *PR) (Checks, error)
 	Merge(ctx context.Context, number int, strategy string) error
+	// DeleteBranch removes a branch after a successful merge.
+	DeleteBranch(ctx context.Context, branch string) error
 }
 
 // ErrAlreadyExists means an open PR already exists for the branch pair.
