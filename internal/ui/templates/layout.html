@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}} · Git Airlock</title>
+{{if eq .Title "Overview"}}<meta http-equiv="refresh" content="15">{{end}}
 <style>
 :root{color-scheme:light dark;--bg:#f6f8fb;--card:#fff;--fg:#0f172a;--muted:#64748b;--line:#e2e8f0;--accent:#2563eb;--ok:#059669;--warn:#b45309;--err:#dc2626}
 @media (prefers-color-scheme:dark){:root{--bg:#0b1120;--card:#111a2e;--fg:#e2e8f0;--muted:#94a3b8;--line:#1e293b;--accent:#60a5fa;--ok:#34d399;--warn:#fbbf24;--err:#f87171}}
@@ -36,13 +37,41 @@ tr:last-child td{border-bottom:0}
 pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:1rem;overflow:auto;font-size:.84rem;line-height:1.45}
 footer{max-width:1150px;margin:0 auto;padding:0 1.5rem 2rem;color:var(--muted);font-size:.78rem}
 a{color:var(--accent)}
+.status{display:flex;gap:1.5rem;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1.15rem 1.3rem;margin-bottom:1.2rem;position:relative;overflow:hidden}
+.status h2{margin:0;font-size:1.25rem}
+.status p{margin:.15rem 0 0;font-size:.86rem}
+.status-main{display:flex;gap:.8rem;align-items:center}
+.dot{width:.7rem;height:.7rem;border-radius:50%;background:var(--muted);flex:0 0 auto}
+.status-waiting .dot{background:var(--warn);animation:pulse 1.4s infinite}
+.status-queued .dot{background:var(--accent);animation:pulse 1.4s infinite}
+.status-idle .dot{background:var(--ok)}
+.stats{display:flex;gap:1.6rem}
+.stats div{text-align:right}
+.stats strong{display:block;font-size:1.05rem}
+.stats span{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--line);overflow:hidden}
+.progress span{display:block;height:100%;width:35%;background:var(--accent);animation:slide 1.4s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(380%)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-bottom:1.2rem;align-items:start}
+.badge{display:inline-block;padding:.05rem .45rem;border-radius:999px;font-size:.72rem;font-weight:600;border:1px solid;white-space:nowrap}
+.badge.ok,.badge.merged{color:var(--ok);border-color:currentColor}
+.badge.waiting,.badge.pending{color:var(--warn);border-color:currentColor}
+.badge.failed,.badge.closed{color:var(--err);border-color:currentColor}
+.plain th{width:7.5rem;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.plain th,.plain td{border-bottom:0;padding:.22rem 0}
+.plain td{font-size:.88rem;word-break:break-all}
+.item{padding:.7rem 0;border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:0}
+.item .rowline{display:flex;justify-content:space-between;gap:.8rem;align-items:baseline}
+.small{font-size:.8rem}
 </style>
 </head>
 <body>
 <header>
   <div class="brand">Git Airlock</div>
   <div class="repo">{{.Config.Repo}} · {{.Config.Provider}}{{if .Config.AutoPR}} · auto PR{{end}}</div>
-  <nav><a href="/">dashboard</a><a href="/logs">logs</a></nav>
+  <nav><a href="/">overview</a><a href="/manual">manual</a><a href="/logs">logs</a></nav>
 </header>
 <main>
 {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}

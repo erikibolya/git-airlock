@@ -154,10 +154,16 @@ airlock ui --config /path/to/.airlock.toml
 # airlock ui: http://127.0.0.1:8787/
 ```
 
-The dashboard shows pending requests, recent results, the worker log, and forms
-to queue open/status/merge actions plus an immediate sync. It never holds the
-API token and never calls the git host: buttons only write requests to the
-queue, exactly like the CLI.
+The dashboard opens on an **overview**: the worker state (idle, working, or
+waiting for CI) with an activity bar, the repository it watches, requests in
+progress with their checks, and recent activity. The overview refreshes itself
+every 15 seconds. Manual actions (open/check/merge PR, immediate sync) live on a
+separate **manual** page, because automatic pull requests handle normal work.
+**logs** shows the worker log.
+
+It never holds the API token and never calls the git host: buttons only write
+requests to the queue, exactly like the CLI. (The manual *Sync now* button is the
+exception; like `airlock sync`, it runs on the machine showing the dashboard.)
 
 **Localhost vs LAN.** The default bind is `127.0.0.1:8787`, so only the computer
 running the UI can open it. To view it from another device on your network:

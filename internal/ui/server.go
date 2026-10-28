@@ -28,7 +28,7 @@ var templateFS embed.FS
 var pages = map[string]*template.Template{}
 
 func init() {
-	for _, name := range []string{"index", "result", "logs"} {
+	for _, name := range []string{"overview", "manual", "result", "logs"} {
 		pages[name] = template.Must(template.ParseFS(templateFS, "templates/layout.html", "templates/"+name+".html"))
 	}
 }
@@ -67,7 +67,8 @@ func NewAccessToken() string {
 // Handler returns the HTTP handler.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.auth(s.handleIndex))
+	mux.HandleFunc("/", s.auth(s.handleOverview))
+	mux.HandleFunc("/manual", s.auth(s.handleManual))
 	mux.HandleFunc("/pr/open", s.auth(s.handleOpen))
 	mux.HandleFunc("/pr/status", s.auth(s.handleStatus))
 	mux.HandleFunc("/pr/merge", s.auth(s.handleMerge))
@@ -131,6 +132,36 @@ type pageData struct {
 	QueueMode  string
 	AuthMode   string
 	Now        time.Time
+
+	// Overview page.
+	PendingItems []pendingItem
+	Activity     []activityItem
+	Active       bool
+	Waiting      bool
+	Status       string
+	StatusTitle  string
+	StatusSub    string
+	LastActivity string
+	LastCheck    string
+}
+
+type pendingItem struct {
+	Request queue.Request
+	Label   string
+	Detail  string
+	Checks  string
+	PR      int
+	Since   string
+	Pending bool
+}
+
+type activityItem struct {
+	At      string
+	Label   string
+	Message string
+	State   string
+	Checks  string
+	URL     string
 }
 
 func (s *Server) baseData(title string) pageData {
@@ -155,20 +186,169 @@ func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+// handleOverview is the default page: what is watched, what the worker is
+// doing, and the latest results. Manual tools live on /manual.
+func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
 	pending, err := s.store.Pending()
 	if err != nil {
-		data := s.baseData("Dashboard")
+		data := s.baseData("Overview")
 		data.Error = err.Error()
-		s.render(w, "index", data)
+		s.render(w, "overview", data)
 		return
 	}
 	results, _ := s.store.ListResults(25)
-	data := s.baseData("Dashboard")
+	data := s.baseData("Overview")
+	data.Flash = r.URL.Query().Get("flash")
 	data.Pending = pending
 	data.Results = results
+	data.Active = len(pending) > 0
+
+	for _, req := range pending {
+		item := pendingItem{
+			Request: req,
+			Label:   requestLabel(req),
+			Detail:  "queued; the worker picks it up within a minute",
+			Since:   ageText(idTime(req.ID)),
+		}
+		if res, err := s.store.ReadResult(req.ID); err == nil && res != nil {
+			item.Detail = res.Message
+			item.Checks = res.Checks
+			item.PR = res.PR
+			item.Pending = res.Pending
+		}
+		if item.Pending || item.Checks == "pending" {
+			data.Waiting = true
+		}
+		data.PendingItems = append(data.PendingItems, item)
+	}
+
+	for _, res := range results {
+		data.Activity = append(data.Activity, activityItem{
+			At:      ageText(idTime(res.ID)),
+			Label:   resultLabel(res),
+			Message: res.Message,
+			State:   resultState(res),
+			Checks:  res.Checks,
+			URL:     res.URL,
+		})
+		if data.LastCheck == "" && res.Checks != "" && res.Checks != "none" {
+			if res.PR > 0 {
+				data.LastCheck = fmt.Sprintf("PR #%d, checks %s, %s", res.PR, res.Checks, ageText(idTime(res.ID)))
+			} else {
+				data.LastCheck = fmt.Sprintf("checks %s, %s", res.Checks, ageText(idTime(res.ID)))
+			}
+		}
+	}
+	if len(results) > 0 {
+		data.LastActivity = ageText(idTime(results[0].ID))
+	}
+
+	switch {
+	case data.Waiting:
+		data.Status = "waiting"
+		data.StatusTitle = "Waiting for CI"
+		data.StatusSub = "The worker checks every minute and merges when the checks are green."
+	case data.Active:
+		data.Status = "queued"
+		data.StatusTitle = "Working"
+		data.StatusSub = "A request is queued; the worker will execute it within a minute."
+	default:
+		data.Status = "idle"
+		data.StatusTitle = "Idle"
+		if data.LastActivity != "" {
+			data.StatusSub = "Everything is synced. Last activity " + data.LastActivity + "."
+		} else {
+			data.StatusSub = "Everything is synced. Nothing to do."
+		}
+	}
+	s.render(w, "overview", data)
+}
+
+// handleManual renders the explicit request forms. Most work is handled by
+// auto_pr, so this is an exception page.
+func (s *Server) handleManual(w http.ResponseWriter, r *http.Request) {
+	results, _ := s.store.ListResults(10)
+	data := s.baseData("Manual")
+	data.Results = results
 	data.Flash = r.URL.Query().Get("flash")
-	s.render(w, "index", data)
+	s.render(w, "manual", data)
+}
+
+func requestLabel(req queue.Request) string {
+	switch req.Action {
+	case queue.ActionOpen:
+		base := req.Base
+		if base == "" {
+			base = "base"
+		}
+		return fmt.Sprintf("Open PR %s -> %s", req.Head, base)
+	case queue.ActionStatus:
+		return fmt.Sprintf("Check PR #%d", req.Number)
+	case queue.ActionMerge:
+		return fmt.Sprintf("Merge PR #%d", req.Number)
+	default:
+		return req.Action
+	}
+}
+
+func resultLabel(res queue.Result) string {
+	switch res.Action {
+	case queue.ActionOpen:
+		return "Open PR"
+	case queue.ActionStatus:
+		return fmt.Sprintf("Check PR #%d", res.PR)
+	case queue.ActionMerge:
+		return fmt.Sprintf("Merge PR #%d", res.PR)
+	default:
+		return res.Action
+	}
+}
+
+func resultState(res queue.Result) string {
+	switch {
+	case res.Pending:
+		return "waiting"
+	case res.Merged:
+		return "merged"
+	case res.OK:
+		return "ok"
+	case res.State == "closed":
+		return "closed"
+	default:
+		return "failed"
+	}
+}
+
+func idTime(id string) time.Time {
+	if len(id) < 15 {
+		return time.Time{}
+	}
+	t, err := time.ParseInLocation("20060102-150405", id[:15], time.Local)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+func ageText(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%d min ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%d h ago", int(d.Hours()))
+	default:
+		return t.Format("2 Jan 15:04")
+	}
 }
 
 func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
@@ -331,7 +511,7 @@ func (s *Server) formOK(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (s *Server) flash(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/?flash="+url.QueryEscape(msg), http.StatusSeeOther)
+	http.Redirect(w, r, "/manual?flash="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 func formNumber(r *http.Request, name string) int {

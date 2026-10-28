@@ -37,6 +37,15 @@ func TestDashboardAndEnqueue(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), "owner/name") {
 		t.Fatal("dashboard does not show the repo")
 	}
+	if !strings.Contains(rr.Body.String(), "Recent activity") {
+		t.Fatal("overview does not show activity")
+	}
+
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/manual", nil))
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Queue open PR") {
+		t.Fatalf("GET /manual = %d", rr.Code)
+	}
 
 	form := url.Values{"csrf": {s.csrf}, "head": {"feature"}, "base": {"main"}, "merge": {"when-green"}}
 	req := httptest.NewRequest(http.MethodPost, "/pr/open", strings.NewReader(form.Encode()))

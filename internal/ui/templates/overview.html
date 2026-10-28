@@ -1,0 +1,71 @@
+{{define "content"}}
+<section class="status status-{{.Status}}">
+  <div class="status-main">
+    <span class="dot"></span>
+    <div>
+      <h2>{{.StatusTitle}}</h2>
+      <p class="muted">{{.StatusSub}}</p>
+      {{if .LastCheck}}<p class="muted small">Last check: {{.LastCheck}}</p>{{end}}
+    </div>
+  </div>
+  <div class="stats">
+    <div><strong>{{len .PendingItems}}</strong><span>pending</span></div>
+    <div><strong>{{if .Config.AutoPR}}on{{else}}off{{end}}</strong><span>auto PR</span></div>
+    <div><strong>{{.Config.Merge}}</strong><span>merge</span></div>
+  </div>
+  {{if .Active}}<div class="progress"><span></span></div>{{end}}
+</section>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Watching</h2>
+    <table class="plain">
+      <tr><th>repository</th><td>{{.Config.Repo}}</td></tr>
+      <tr><th>provider</th><td>{{.Config.Provider}}</td></tr>
+      <tr><th>base branch</th><td>{{.Config.Base}}</td></tr>
+      <tr><th>mirror</th><td><code>{{.Config.Mirror}}</code></td></tr>
+      <tr><th>queue</th><td>{{.QueueMode}}</td></tr>
+    </table>
+    <p class="muted small">Pushes into the mirror are synced to {{.Config.Provider}} every minute.{{if .Config.AutoPR}} A branch ahead of <code>{{.Config.Base}}</code> gets a pull request automatically and is merged when its checks are green.{{end}}</p>
+  </section>
+
+  <section class="card">
+    <h2>In progress</h2>
+    {{if .PendingItems}}
+      {{range .PendingItems}}
+      <div class="item">
+        <div class="rowline">
+          <strong>{{.Label}}</strong>
+          <span class="badge {{if .Checks}}{{.Checks}}{{else}}waiting{{end}}">{{if .Checks}}{{.Checks}}{{else}}queued{{end}}</span>
+        </div>
+        <div class="muted small">{{.Detail}}</div>
+        {{if .Since}}<div class="muted small">{{.Since}}</div>{{end}}
+      </div>
+      {{end}}
+    {{else}}
+      <p class="muted">Nothing waiting. The worker runs every minute; no action is needed.</p>
+    {{end}}
+  </section>
+</div>
+
+<section>
+  <h2>Recent activity</h2>
+  {{if .Activity}}
+  <table>
+    <thead><tr><th>when</th><th>action</th><th>state</th><th>message</th></tr></thead>
+    <tbody>
+    {{range .Activity}}
+      <tr>
+        <td class="muted">{{.At}}</td>
+        <td>{{.Label}}</td>
+        <td><span class="badge {{.State}}">{{.State}}</span>{{if .Checks}} <span class="muted small">checks {{.Checks}}</span>{{end}}</td>
+        <td>{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noreferrer">{{.Message}}</a>{{else}}{{.Message}}{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="muted">No results yet.</p>
+  {{end}}
+</section>
+{{end}}
