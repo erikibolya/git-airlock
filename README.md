@@ -198,7 +198,9 @@ the browser.
 Windows, WebKitGTK on Linux, WKWebView on macOS): no browser tab, no local
 server to keep running. It reads the same configs and queues as the CLI, adds a
 notification-area icon with **Open dashboard**, **Repositories…**, **Sync now**
-and **Quit**, and hides to the tray when you close the window. It never holds
+and **Quit**, and hides to the tray when you close the window. The tray menu
+also shows the latest worker result (click it to open the dashboard) and the
+tooltip follows it; it refreshes every 30 seconds. It never holds
 the API token; the scheduled worker still performs the sync and the API calls.
 
 ```powershell
@@ -248,6 +250,7 @@ api      = "https://gitea.example.com/api/v1"
 ca       = ""                        # optional PEM bundle
 base     = "main"                    # default PR target
 merge    = "when-green"              # never | when-green | now
+merge_strategy = "merge"             # merge | squash | rebase
 auto_pr  = false                     # open PRs for branches ahead of base
 auto_pr_ignore = ["wip/*"]           # optional branch globs to skip
 ```
@@ -301,6 +304,11 @@ workstation; neither side silently destroys the other.
 2. read the PR's CI status;
 3. merge only on `success`; `pending` leaves the request queued and the worker
    retries every minute; `failure` finalises the request with an error.
+
+The merge method is `merge_strategy` (or `--strategy` on `pr open` and
+`pr merge`): `merge`, `squash` or `rebase`. Gitea and GitHub support all three;
+GitLab supports `merge` and `squash` (its API cannot merge after an asynchronous
+rebase).
 
 For Gitea, only `(pull_request)` statuses gate the merge. Push runs get
 cancelled by newer pushes and Gitea reports those as failures, so including them

@@ -64,7 +64,7 @@ func TestFindCreateGetMerge(t *testing.T) {
 	if err != nil || got.Number != 5 || !got.Mergeable {
 		t.Fatalf("get: %+v %v", got, err)
 	}
-	if err := p.Merge(context.Background(), 5); err != nil {
+	if err := p.Merge(context.Background(), 5, "merge"); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 }
@@ -114,5 +114,24 @@ func TestCreateConflict(t *testing.T) {
 	_, err := p.CreatePR(context.Background(), provider.CreateRequest{Head: "h", Base: "b", Title: "t"})
 	if !errors.Is(err, provider.ErrAlreadyExists) {
 		t.Fatalf("expected ErrAlreadyExists, got %v", err)
+	}
+}
+
+func TestMergeStrategyBody(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	p := New(srv.URL, "o/r", "token", srv.Client())
+	if err := p.Merge(context.Background(), 5, "squash"); err != nil {
+		t.Fatal(err)
+	}
+	if squash, _ := got["squash"].(bool); !squash {
+		t.Fatalf("squash flag missing: %+v", got)
+	}
+	if err := p.Merge(context.Background(), 5, "rebase"); err == nil {
+		t.Fatal("gitlab accepted rebase")
 	}
 }

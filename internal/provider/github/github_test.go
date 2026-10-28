@@ -54,7 +54,7 @@ func TestFindCreateGetMerge(t *testing.T) {
 	if err != nil || created.Number != 8 {
 		t.Fatalf("create: %+v %v", created, err)
 	}
-	if err := p.Merge(context.Background(), 7); err != nil {
+	if err := p.Merge(context.Background(), 7, "merge"); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 }
@@ -128,5 +128,23 @@ func TestCreateConflict(t *testing.T) {
 	_, err := p.CreatePR(context.Background(), provider.CreateRequest{Head: "h", Base: "b", Title: "t"})
 	if !errors.Is(err, provider.ErrAlreadyExists) {
 		t.Fatalf("expected ErrAlreadyExists, got %v", err)
+	}
+}
+
+func TestMergeStrategyBody(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		got = body["merge_method"]
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	p := New(srv.URL, "o/r", "token", srv.Client())
+	if err := p.Merge(context.Background(), 7, "rebase"); err != nil {
+		t.Fatal(err)
+	}
+	if got != "rebase" {
+		t.Fatalf("merge_method = %q, want rebase", got)
 	}
 }

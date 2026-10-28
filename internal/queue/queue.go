@@ -34,8 +34,10 @@ type Request struct {
 	Title   string `json:"title,omitempty"`
 	Body    string `json:"body,omitempty"`
 	Merge   string `json:"merge,omitempty"`
-	Number  int    `json:"number,omitempty"`
-	DryRun  bool   `json:"dry_run,omitempty"`
+	// Strategy is the provider merge method (merge, squash or rebase).
+	Strategy string `json:"strategy,omitempty"`
+	Number   int    `json:"number,omitempty"`
+	DryRun   bool   `json:"dry_run,omitempty"`
 }
 
 // Result is written by the worker.

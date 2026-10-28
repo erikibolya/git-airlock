@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 — 2026-10-28
+
+- Merge strategies: `merge_strategy = "merge" | "squash" | "rebase"` in the
+  config, `--strategy` on `pr open`/`pr merge`, and selectors in the manual
+  dashboard forms. `auto_pr` uses the configured strategy. Gitea and GitHub
+  support all three; GitLab supports merge and squash.
+- The desktop tray menu shows the latest worker result and the tooltip follows
+  it (refreshed every 30 seconds); clicking the entry opens the dashboard.
+
 ## 1.0.0 — 2026-10-28
 
 Stability release. No breaking changes since 0.9.

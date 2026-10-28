@@ -33,6 +33,8 @@ type Config struct {
 	Base string `toml:"base"`
 	// Merge is the default merge policy: never, when-green or now.
 	Merge string `toml:"merge"`
+	// MergeStrategy is the provider merge method: merge, squash or rebase.
+	MergeStrategy string `toml:"merge_strategy"`
 	// AutoPR opens a pull request for every local branch that is ahead of Base.
 	AutoPR bool `toml:"auto_pr"`
 	// AutoPRIgnore lists branch globs (filepath.Match) that AutoPR skips.
@@ -98,6 +100,9 @@ func (c *Config) applyDefaults() {
 	if c.Merge == "" {
 		c.Merge = "when-green"
 	}
+	if c.MergeStrategy == "" {
+		c.MergeStrategy = "merge"
+	}
 	if c.Mirror == "" && c.Repo != "" {
 		c.Mirror = "~/.airlock/" + Slug(c.Repo) + ".git"
 	}
@@ -144,6 +149,11 @@ func (c *Config) Validate() error {
 	case "never", "when-green", "now":
 	default:
 		return fmt.Errorf("merge must be never, when-green or now, got %q", c.Merge)
+	}
+	switch c.MergeStrategy {
+	case "merge", "squash", "rebase":
+	default:
+		return fmt.Errorf("merge_strategy must be merge, squash or rebase, got %q", c.MergeStrategy)
 	}
 	return nil
 }
@@ -209,11 +219,14 @@ base = %q
 # Default merge policy: never, when-green or now.
 merge = %q
 
+# Merge method used by the provider: merge, squash or rebase.
+merge_strategy = %q
+
 # Open a pull request automatically for every branch that is ahead of base.
 auto_pr = false
 
 # Branch patterns that auto_pr ignores (filepath.Match syntax).
 # auto_pr_ignore = ["wip/*", "dependabot/*"]
-`, c.Repo, c.Remote, c.Mirror, c.Queue, c.QueueRemote, c.Provider, c.API, c.CA, c.Base, c.Merge)
+`, c.Repo, c.Remote, c.Mirror, c.Queue, c.QueueRemote, c.Provider, c.API, c.CA, c.Base, c.Merge, c.MergeStrategy)
 	return os.WriteFile(path, []byte(body), 0o644)
 }

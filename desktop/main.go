@@ -99,11 +99,12 @@ type App struct {
 	current   atomic.Pointer[dashBox]
 	setupMode atomic.Bool
 
-	ctx      context.Context
-	quitting atomic.Bool
-	tray     atomic.Bool
-	syncMu   sync.Mutex
-	syncItem *systray.MenuItem
+	ctx        context.Context
+	quitting   atomic.Bool
+	tray       atomic.Bool
+	syncMu     sync.Mutex
+	syncItem   *systray.MenuItem
+	statusItem *systray.MenuItem
 }
 
 func buildBox(paths []string) (*dashBox, error) {
@@ -144,6 +145,7 @@ func (a *App) startup(ctx context.Context) {
 		wailsruntime.WindowShow(ctx)
 	}
 	go a.startTray()
+	go a.watchResults()
 }
 
 func (a *App) showWindow() {
@@ -451,6 +453,7 @@ func (a *App) onReady(icon []byte) {
 	systray.SetTooltip("Git Airlock")
 	mOpen := systray.AddMenuItem("Open dashboard", "Show the Git Airlock window")
 	mRepos := systray.AddMenuItem("Repositories…", "Choose which repositories the dashboard watches")
+	mStatus := systray.AddMenuItem("No activity yet", "Latest worker result; click to open the dashboard")
 	mSync := systray.AddMenuItem("Sync now", "Sync mirrors with the private remote")
 	if a.current.Load() != nil {
 		mSync.Enable()
@@ -458,6 +461,7 @@ func (a *App) onReady(icon []byte) {
 		mSync.Disable()
 	}
 	a.syncItem = mSync
+	a.statusItem = mStatus
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "Quit Git Airlock")
 	a.tray.Store(true)
@@ -475,6 +479,8 @@ func (a *App) onReady(icon []byte) {
 				if a.ctx != nil {
 					wailsruntime.WindowReload(a.ctx)
 				}
+				a.showWindow()
+			case <-mStatus.ClickedCh:
 				a.showWindow()
 			case <-mSync.ClickedCh:
 				go a.syncNow()

@@ -35,6 +35,9 @@ base = "main"
 # Default merge policy: never, when-green or now.
 merge = "when-green"
 
+# Merge method: merge, squash or rebase (GitLab supports merge and squash).
+merge_strategy = "merge"
+
 # Open a pull request automatically for every local branch that is ahead of base.
 auto_pr = false
 
