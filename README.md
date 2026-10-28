@@ -73,6 +73,13 @@ installs the CLI, the desktop dashboard, a Start-menu and desktop shortcut, and
 an autostart entry that keeps the dashboard in the notification area. The
 scheduled worker task is created during setup.
 
+The desktop app updates itself. On startup and from **Help → Check for
+updates…** it reads the signed `latest.json` from the latest release, verifies
+the Ed25519 signature and the installer SHA256, and then downloads, silently
+installs and restarts. `airlock-desktop --check-updates` runs the same check
+headlessly. Package-manager installs upgrade through `brew`, `scoop` or
+`winget`.
+
 Or build from source:
 
 ```bash
