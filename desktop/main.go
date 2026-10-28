@@ -17,6 +17,8 @@ import (
 
 	"github.com/getlantern/systray"
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
+	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -55,6 +57,8 @@ func main() {
 	}
 
 	app := &App{startHidden: hasFlag("--tray") || hasFlag("--minimized"), paths: paths}
+	app.pendingNav.Store("")
+	app.lastRepo.Store("")
 	if hasFlag("--repos") || hasFlag("--setup") {
 		app.setupMode.Store(true)
 	}
@@ -78,6 +82,7 @@ func main() {
 		OnStartup:        app.startup,
 		OnBeforeClose:    app.beforeClose,
 		OnShutdown:       app.shutdown,
+		Menu:             app.menu(),
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId: "git-airlock-desktop",
 			OnSecondInstanceLaunch: func(options.SecondInstanceData) {
@@ -101,8 +106,10 @@ type App struct {
 	paths    []string
 	loadErrs []string
 
-	current   atomic.Pointer[dashBox]
-	setupMode atomic.Bool
+	current    atomic.Pointer[dashBox]
+	setupMode  atomic.Bool
+	pendingNav atomic.Value
+	lastRepo   atomic.Value
 
 	ctx        context.Context
 	quitting   atomic.Bool
@@ -134,6 +141,19 @@ func buildBox(paths []string) (*dashBox, error) {
 // ServeHTTP is the Wails asset handler. The repository picker takes over while
 // setupMode is set or until at least one config loads.
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if p := r.URL.Path; strings.HasPrefix(p, "/repo/") {
+		rest := strings.TrimPrefix(p, "/repo/")
+		if i := strings.IndexByte(rest, '/'); i > 0 {
+			a.lastRepo.Store("/repo/" + rest[:i] + "/")
+		}
+	}
+	// Menu navigation reloads the current page; redirect the document request
+	// to the requested page before serving anything else.
+	if target, _ := a.pendingNav.Load().(string); target != "" && strings.Contains(r.Header.Get("Accept"), "text/html") {
+		a.pendingNav.Store("")
+		http.Redirect(w, r, target, http.StatusSeeOther)
+		return
+	}
 	// The dashboard links to /repositories; serve the native picker there.
 	if r.URL.Path == "/repositories" || r.URL.Path == "/setup" {
 		a.setupMode.Store(true)
@@ -157,6 +177,92 @@ func (a *App) startup(ctx context.Context) {
 	}
 	go a.startTray()
 	go a.watchResults()
+}
+
+// navigate reloads the webview and redirects the document request to path.
+func (a *App) navigate(target string) {
+	a.pendingNav.Store(target)
+	a.setupMode.Store(target == "/repositories")
+	if a.ctx != nil {
+		wailsruntime.WindowReload(a.ctx)
+	}
+	a.showWindow()
+}
+
+func (a *App) repoBase() string {
+	if base, _ := a.lastRepo.Load().(string); base != "" {
+		return base
+	}
+	if box := a.current.Load(); box != nil {
+		if repos := box.dash.Repos(); len(repos) > 0 {
+			return "/repo/" + repos[0].Slug + "/"
+		}
+	}
+	return "/"
+}
+
+func (a *App) navigateRepo(page string) {
+	base := a.repoBase()
+	if base == "/" {
+		a.navigate("/")
+		return
+	}
+	a.navigate(base + page)
+}
+
+func (a *App) quit() {
+	a.quitting.Store(true)
+	a.tray.Store(false)
+	systray.Quit()
+	if a.ctx != nil {
+		wailsruntime.Quit(a.ctx)
+	}
+}
+
+func (a *App) about() {
+	if a.ctx == nil {
+		return
+	}
+	var repos []string
+	if box := a.current.Load(); box != nil {
+		for _, cfg := range box.cfgs {
+			repos = append(repos, cfg.Repo)
+		}
+	}
+	msg := "Git Airlock\n\nhttps://github.com/erikibolya/git-airlock"
+	if len(repos) > 0 {
+		msg = "Git Airlock\n\nWatching: " + strings.Join(repos, ", ") + "\n\nhttps://github.com/erikibolya/git-airlock"
+	}
+	_, _ = wailsruntime.MessageDialog(a.ctx, wailsruntime.MessageDialogOptions{
+		Type:    wailsruntime.InfoDialog,
+		Title:   "About Git Airlock",
+		Message: msg,
+	})
+}
+
+// menu builds the native application menu; the tray remains for background use.
+func (a *App) menu() *menu.Menu {
+	m := menu.NewMenu()
+	file := m.AddSubmenu("File")
+	file.AddText("Dashboard", nil, func(*menu.CallbackData) { a.navigate("/") })
+	file.AddText("Repositories…", nil, func(*menu.CallbackData) { a.navigate("/repositories") })
+	file.AddSeparator()
+	file.AddText("Sync now", nil, func(*menu.CallbackData) { go a.syncNow() })
+	file.AddSeparator()
+	file.AddText("Quit", keys.CmdOrCtrl("q"), func(*menu.CallbackData) { a.quit() })
+
+	view := m.AddSubmenu("View")
+	view.AddText("Manual", nil, func(*menu.CallbackData) { a.navigateRepo("manual") })
+	view.AddText("Logs", nil, func(*menu.CallbackData) { a.navigateRepo("logs") })
+
+	help := m.AddSubmenu("Help")
+	help.AddText("Git Airlock on GitHub", nil, func(*menu.CallbackData) {
+		if a.ctx != nil {
+			wailsruntime.BrowserOpenURL(a.ctx, "https://github.com/erikibolya/git-airlock")
+		}
+	})
+	help.AddText("About", nil, func(*menu.CallbackData) { a.about() })
+	return m
 }
 
 func (a *App) showWindow() {
@@ -496,12 +602,7 @@ func (a *App) onReady(icon []byte) {
 			case <-mSync.ClickedCh:
 				go a.syncNow()
 			case <-mQuit.ClickedCh:
-				a.quitting.Store(true)
-				a.tray.Store(false)
-				systray.Quit()
-				if a.ctx != nil {
-					wailsruntime.Quit(a.ctx)
-				}
+				a.quit()
 				return
 			}
 		}
