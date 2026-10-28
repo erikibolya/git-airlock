@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -35,12 +36,19 @@ func (f *fakeProvider) FindOpenPR(context.Context, string, string) (*provider.PR
 	}
 	return f.pr, nil
 }
+func (f *fakeProvider) FindPR(context.Context, string, string) (*provider.PR, error) {
+	return f.pr, nil
+}
 func (f *fakeProvider) CreatePR(context.Context, provider.CreateRequest) (*provider.PR, error) {
 	f.createCalls++
+	n := 1
 	if f.pr != nil {
-		return nil, provider.ErrAlreadyExists
+		if f.pr.State == "open" {
+			return nil, provider.ErrAlreadyExists
+		}
+		n = f.pr.Number + 1
 	}
-	f.pr = &provider.PR{Number: 1, URL: "https://example/1", State: "open", Mergeable: true, HeadSHA: "sha1"}
+	f.pr = &provider.PR{Number: n, URL: fmt.Sprintf("https://example/%d", n), State: "open", Mergeable: true, HeadSHA: "sha-new"}
 	return f.pr, nil
 }
 func (f *fakeProvider) GetPR(context.Context, int) (*provider.PR, error) {
@@ -146,6 +154,78 @@ func TestMergeWhenGreenPending(t *testing.T) {
 	res, _ = q.ReadResult(id)
 	if !res.OK || !res.Merged || f.mergeCalls != 1 {
 		t.Fatalf("result=%+v merge=%d", res, f.mergeCalls)
+	}
+}
+
+func TestOpenAlreadyMerged(t *testing.T) {
+	f := &fakeProvider{
+		pr:     &provider.PR{Number: 9, State: "closed", Merged: true, HeadSHA: "shaX"},
+		checks: provider.ChecksSuccess,
+	}
+	w, q := newWorker(t, f)
+	id, err := q.Enqueue(&queue.Request{Action: queue.ActionOpen, Head: "feature", Base: "main", HeadSHA: "shaX", Merge: "when-green"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	res, err := q.ReadResult(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.OK || !res.Merged || f.createCalls != 0 || res.PR != 9 {
+		t.Fatalf("result=%+v create=%d", res, f.createCalls)
+	}
+	if pending, _ := q.Pending(); len(pending) != 0 {
+		t.Fatalf("request not finalized: %+v", pending)
+	}
+}
+
+func TestOpenNewCommitAfterMerge(t *testing.T) {
+	f := &fakeProvider{
+		pr:     &provider.PR{Number: 10, State: "closed", Merged: true, HeadSHA: "old"},
+		checks: provider.ChecksPending,
+	}
+	w, q := newWorker(t, f)
+	id, err := q.Enqueue(&queue.Request{Action: queue.ActionOpen, Head: "feature", Base: "main", HeadSHA: "new", Merge: "when-green"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	res, err := q.ReadResult(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.createCalls != 1 || f.pr == nil || f.pr.Number != 11 || res.PR != 11 {
+		t.Fatalf("result=%+v create=%d pr=%+v", res, f.createCalls, f.pr)
+	}
+	if !res.Pending {
+		t.Fatalf("expected pending checks, got %+v", res)
+	}
+}
+
+func TestOpenNewCommitAfterClosed(t *testing.T) {
+	f := &fakeProvider{
+		pr:     &provider.PR{Number: 12, State: "closed", Merged: false, HeadSHA: "old"},
+		checks: provider.ChecksPending,
+	}
+	w, q := newWorker(t, f)
+	id, err := q.Enqueue(&queue.Request{Action: queue.ActionOpen, Head: "feature", Base: "main", HeadSHA: "new", Merge: "when-green"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	res, err := q.ReadResult(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.createCalls != 1 || f.pr == nil || f.pr.Number != 13 || res.PR != 13 {
+		t.Fatalf("result=%+v create=%d pr=%+v", res, f.createCalls, f.pr)
 	}
 }
 

@@ -20,13 +20,17 @@ func installLinux(o Options) error {
 	if minutes < 1 {
 		minutes = 1
 	}
+	execStart := fmt.Sprintf(`"%s" worker`, o.ExePath)
+	for _, p := range o.ConfigPaths {
+		execStart += fmt.Sprintf(` --config "%s"`, p)
+	}
 	service := fmt.Sprintf(`[Unit]
 Description=Git Airlock worker
 
 [Service]
 Type=oneshot
-ExecStart="%s" worker --config "%s"
-`, o.ExePath, o.ConfigPath)
+ExecStart=%s
+`, execStart)
 	timer := fmt.Sprintf(`[Unit]
 Description=Run Git Airlock every %d minute(s)
 

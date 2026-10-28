@@ -71,6 +71,30 @@ func (p *Provider) FindOpenPR(ctx context.Context, head, base string) (*provider
 	return nil, nil
 }
 
+func (p *Provider) FindPR(ctx context.Context, head, base string) (*provider.PR, error) {
+	q := url.Values{}
+	q.Set("state", "all")
+	q.Set("source_branch", head)
+	q.Set("target_branch", base)
+	q.Set("per_page", "50")
+	q.Set("order_by", "updated_at")
+	q.Set("sort", "desc")
+	var list []mr
+	if err := p.do(ctx, http.MethodGet, p.mrPath()+"?"+q.Encode(), nil, &list); err != nil {
+		return nil, err
+	}
+	var best *provider.PR
+	for i := range list {
+		if list[i].SourceBranch != head || list[i].TargetBranch != base {
+			continue
+		}
+		if best == nil || list[i].IID > best.Number {
+			best = list[i].toPR()
+		}
+	}
+	return best, nil
+}
+
 func (p *Provider) CreatePR(ctx context.Context, req provider.CreateRequest) (*provider.PR, error) {
 	body := map[string]any{
 		"source_branch": req.Head,

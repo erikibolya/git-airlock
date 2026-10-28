@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -195,14 +196,19 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 	if merge != "never" && merge != "when-green" && merge != "now" {
 		merge = s.cfg.Merge
 	}
+	headSHA := ""
+	if out, err := exec.Command("git", "-C", s.cfg.Mirror, "rev-parse", "refs/heads/"+head).Output(); err == nil {
+		headSHA = strings.TrimSpace(string(out))
+	}
 	req := &queue.Request{
-		Action: queue.ActionOpen,
-		Head:   head,
-		Base:   base,
-		Title:  strings.TrimSpace(r.FormValue("title")),
-		Body:   strings.TrimSpace(r.FormValue("body")),
-		Merge:  merge,
-		DryRun: r.FormValue("dry_run") != "",
+		Action:  queue.ActionOpen,
+		Head:    head,
+		HeadSHA: headSHA,
+		Base:    base,
+		Title:   strings.TrimSpace(r.FormValue("title")),
+		Body:    strings.TrimSpace(r.FormValue("body")),
+		Merge:   merge,
+		DryRun:  r.FormValue("dry_run") != "",
 	}
 	id, err := s.store.Enqueue(req)
 	if err != nil {

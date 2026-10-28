@@ -77,6 +77,30 @@ func (p *Provider) FindOpenPR(ctx context.Context, head, base string) (*provider
 	return nil, nil
 }
 
+func (p *Provider) FindPR(ctx context.Context, head, base string) (*provider.PR, error) {
+	q := url.Values{}
+	q.Set("state", "all")
+	q.Set("head", p.owner+":"+head)
+	q.Set("base", base)
+	q.Set("sort", "updated")
+	q.Set("direction", "desc")
+	q.Set("per_page", "50")
+	var list []apiPR
+	if err := p.do(ctx, http.MethodGet, "/repos/"+p.repo+"/pulls?"+q.Encode(), nil, &list); err != nil {
+		return nil, err
+	}
+	var best *provider.PR
+	for i := range list {
+		if list[i].Head.Ref != head || list[i].Base.Ref != base {
+			continue
+		}
+		if best == nil || list[i].Number > best.Number {
+			best = list[i].toPR()
+		}
+	}
+	return best, nil
+}
+
 func (p *Provider) CreatePR(ctx context.Context, req provider.CreateRequest) (*provider.PR, error) {
 	body := map[string]any{
 		"head":  req.Head,

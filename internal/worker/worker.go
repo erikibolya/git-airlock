@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -131,11 +132,43 @@ func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base s
 		fail(res, fmt.Errorf("open: invalid merge mode %q", merge))
 		return
 	}
+	if req.HeadSHA != "" && w.baseContains(req.HeadSHA, base) {
+		applyPR(res, &provider.PR{State: "merged", Merged: true, HeadSHA: req.HeadSHA})
+		res.OK = true
+		res.Message = fmt.Sprintf("commit %.8s is already on %s; nothing to merge", req.HeadSHA, base)
+		return
+	}
 
 	pr, err := w.P.FindOpenPR(ctx, head, base)
 	if err != nil {
 		fail(res, err)
 		return
+	}
+	if pr == nil {
+		// No open PR. If the newest PR for this branch pair is already merged
+		// (or was closed), the request was already fulfilled; do not create a
+		// duplicate. A new commit on the same branch carries a new HeadSHA and
+		// is allowed to open a fresh PR.
+		latest, err := w.P.FindPR(ctx, head, base)
+		if err != nil {
+			fail(res, err)
+			return
+		}
+		if latest != nil {
+			switch {
+			case latest.Merged && (req.HeadSHA == "" || latest.HeadSHA == req.HeadSHA):
+				applyPR(res, latest)
+				res.OK = true
+				res.Message = fmt.Sprintf("PR #%d already merged", latest.Number)
+				return
+			case latest.State == "closed" && !latest.Merged && (req.HeadSHA == "" || latest.HeadSHA == req.HeadSHA):
+				applyPR(res, latest)
+				res.Message = fmt.Sprintf("PR #%d closed without merge", latest.Number)
+				return
+			case latest.State == "open":
+				pr = latest
+			}
+		}
 	}
 	if pr == nil && req.DryRun {
 		res.OK = true
@@ -285,6 +318,19 @@ func (w *Worker) refresh(ctx context.Context, res *queue.Result, number int) err
 	}
 	res.Checks = string(checks)
 	return nil
+}
+
+// baseContains reports whether sha is already an ancestor of the remote base
+// branch in the mirror. It is the cheapest way to tell "already merged" from
+// "needs a new PR" without another API round trip.
+func (w *Worker) baseContains(sha, base string) bool {
+	if sha == "" || base == "" || w.Cfg.Mirror == "" || w.Cfg.Remote == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ref := "refs/remotes/" + w.Cfg.Remote + "/" + base
+	return exec.CommandContext(ctx, "git", "-C", w.Cfg.Mirror, "merge-base", "--is-ancestor", sha, ref).Run() == nil
 }
 
 func applyPR(res *queue.Result, pr *provider.PR) {

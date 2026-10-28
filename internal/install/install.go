@@ -14,8 +14,8 @@ import (
 type Options struct {
 	// Name is the task/unit name, default "Git Airlock".
 	Name string
-	// ConfigPath is the absolute .airlock.toml path.
-	ConfigPath string
+	// ConfigPaths are the .airlock.toml paths this worker should process.
+	ConfigPaths []string
 	// ExePath is the airlock binary; defaults to the running executable.
 	ExePath string
 	// Interval between worker runs, default 1 minute.
@@ -41,11 +41,16 @@ func (o *Options) normalize() error {
 	if abs, err := filepath.Abs(o.ExePath); err == nil {
 		o.ExePath = abs
 	}
-	if o.ConfigPath == "" {
-		return fmt.Errorf("config path is required")
+	if len(o.ConfigPaths) == 0 {
+		return fmt.Errorf("at least one config path is required")
 	}
-	if abs, err := filepath.Abs(o.ConfigPath); err == nil {
-		o.ConfigPath = abs
+	for i, p := range o.ConfigPaths {
+		if p == "" {
+			return fmt.Errorf("config path %d is empty", i+1)
+		}
+		if abs, err := filepath.Abs(p); err == nil {
+			o.ConfigPaths[i] = abs
+		}
 	}
 	return nil
 }

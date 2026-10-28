@@ -42,6 +42,15 @@ type exitError struct {
 
 func (e *exitError) Error() string { return e.msg }
 
+type stringList []string
+
+func (s *stringList) String() string { return strings.Join(*s, ",") }
+
+func (s *stringList) Set(v string) error {
+	*s = append(*s, v)
+	return nil
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -72,6 +81,8 @@ func run(ctx context.Context, args []string) error {
 		return cmdPR(ctx, args[1:])
 	case "worker":
 		return cmdWorker(ctx, args[1:])
+	case "status":
+		return cmdStatus(ctx, args[1:])
 	case "ui":
 		return cmdUI(ctx, args[1:])
 	case "doctor":
@@ -115,7 +126,8 @@ Usage:
                     [--wait 2m|--no-wait] [--config PATH]
   airlock pr status <number> [--wait 2m|--no-wait] [--config PATH]
   airlock pr merge  <number> [--when-green] [--wait 2m|--no-wait] [--config PATH]
-  airlock worker    [--config PATH] [--no-sync] [--loop 1m]
+  airlock worker    [--config PATH]... [--no-sync] [--loop 1m]
+  airlock status    [--config PATH] [--watch] [--json]
   airlock ui        [--config PATH] [--listen 127.0.0.1:8787]
                     [--token TOKEN] [--open]
   airlock doctor    [--config PATH]
@@ -393,6 +405,10 @@ func cmdPROpen(ctx context.Context, args []string) error {
 	if head == base {
 		return fmt.Errorf("head and base are both %q; check out a feature branch or pass --head/--base", base)
 	}
+	headSHA := ""
+	if out, err := exec.Command("git", "-C", root, "rev-parse", head).Output(); err == nil {
+		headSHA = strings.TrimSpace(string(out))
+	}
 	title := *titleFlag
 	if title == "" {
 		title, _ = gitutil.HeadSubject(root)
@@ -402,13 +418,14 @@ func cmdPROpen(ctx context.Context, args []string) error {
 		merge = cfg.Merge
 	}
 	req := &queue.Request{
-		Action: queue.ActionOpen,
-		Head:   head,
-		Base:   base,
-		Title:  title,
-		Body:   *bodyFlag,
-		Merge:  merge,
-		DryRun: *dryRun,
+		Action:  queue.ActionOpen,
+		Head:    head,
+		HeadSHA: headSHA,
+		Base:    base,
+		Title:   title,
+		Body:    *bodyFlag,
+		Merge:   merge,
+		DryRun:  *dryRun,
 	}
 	return enqueueAndWait(ctx, cfg, req, *wait, *noWait)
 }
@@ -512,43 +529,76 @@ func printResult(res *queue.Result) {
 
 // ---------- worker ----------
 
+type repoWorker struct {
+	cfg  *config.Config
+	path string
+	w    *worker.Worker
+}
+
 func cmdWorker(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("worker", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	configPath := fs.String("config", "", "config path")
+	var configs stringList
+	fs.Var(&configs, "config", "config path (repeatable)")
 	noSync := fs.Bool("no-sync", false, "skip the mirror sync")
 	loop := fs.Duration("loop", 0, "run forever with this interval (0 = once)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	cfg, path, err := loadConfig(*configPath)
-	if err != nil {
-		return err
+
+	paths := []string(configs)
+	if len(paths) == 0 {
+		p, err := config.Resolve("")
+		if err != nil {
+			return err
+		}
+		paths = []string{p}
 	}
-	p, err := newProvider(cfg)
-	if err != nil {
-		return err
+	var repos []*repoWorker
+	for _, path := range paths {
+		cfg, err := config.Load(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "config %s: %v\n", path, err)
+			continue
+		}
+		p, err := newProvider(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "config %s: %v\n", path, err)
+			continue
+		}
+		w, err := worker.New(cfg, p)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "config %s: %v\n", path, err)
+			continue
+		}
+		repos = append(repos, &repoWorker{cfg: cfg, path: path, w: w})
 	}
-	w, err := worker.New(cfg, p)
-	if err != nil {
-		return err
+	if len(repos) == 0 {
+		return errors.New("no usable configs")
 	}
-	for {
-		if !*noSync {
-			report, err := gitutil.Sync(ctx, cfg.Mirror, cfg.Remote)
-			printSyncReport(report)
+
+	runAll := func() {
+		for _, r := range repos {
+			if !*noSync {
+				report, err := gitutil.Sync(ctx, r.cfg.Mirror, r.cfg.Remote)
+				printSyncReport(report)
+				if err != nil {
+					r.w.Q.Log("sync failed: %v", err)
+					fmt.Fprintf(os.Stderr, "sync %s: %v\n", r.cfg.Repo, err)
+				}
+			}
+			n, err := r.w.Run(ctx)
 			if err != nil {
-				w.Q.Log("sync failed: %v", err)
-				fmt.Fprintln(os.Stderr, "sync:", err)
+				r.w.Q.Log("worker failed: %v", err)
+				fmt.Fprintf(os.Stderr, "worker %s: %v\n", r.cfg.Repo, err)
+			} else if n > 0 {
+				fmt.Printf("processed %d request(s) from %s\n", n, r.path)
 			}
 		}
-		n, err := w.Run(ctx)
-		if err != nil {
-			w.Q.Log("worker failed: %v", err)
-			fmt.Fprintln(os.Stderr, "worker:", err)
-		} else if n > 0 {
-			fmt.Printf("processed %d request(s) from %s\n", n, path)
-		}
+	}
+
+	for {
+		runAll()
 		if *loop <= 0 {
 			return nil
 		}
@@ -556,6 +606,101 @@ func cmdWorker(ctx context.Context, args []string) error {
 		case <-ctx.Done():
 			return nil
 		case <-time.After(*loop):
+		}
+	}
+}
+
+// ---------- status ----------
+
+func cmdStatus(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("status", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	configPath := fs.String("config", "", "config path")
+	watch := fs.Bool("watch", false, "refresh every 2 seconds (TUI-lite)")
+	asJSON := fs.Bool("json", false, "print JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, _, err := loadConfig(*configPath)
+	if err != nil {
+		return err
+	}
+	q, err := queue.Open(cfg.Queue, cfg.Mirror)
+	if err != nil {
+		return err
+	}
+	if err := q.Ensure(); err != nil {
+		return err
+	}
+
+	render := func() error {
+		pending, err := q.Pending()
+		if err != nil {
+			return err
+		}
+		results, err := q.ListResults(20)
+		if err != nil {
+			return err
+		}
+		if *asJSON {
+			data, err := json.MarshalIndent(map[string]any{
+				"repo": cfg.Repo, "provider": cfg.Provider, "pending": pending, "results": results,
+			}, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(data))
+			return nil
+		}
+		fmt.Printf("Git Airlock · %s · %s\n", cfg.Repo, cfg.Provider)
+		fmt.Printf("mirror: %s\nqueue:  %s\n\n", cfg.Mirror, cfg.Queue)
+		fmt.Printf("Pending (%d)\n", len(pending))
+		if len(pending) == 0 {
+			fmt.Println("  (empty)")
+		}
+		for _, r := range pending {
+			detail := ""
+			if r.Action == queue.ActionOpen {
+				detail = r.Head + " -> " + r.Base
+			} else if r.Number > 0 {
+				detail = fmt.Sprintf("#%d", r.Number)
+			}
+			fmt.Printf("  %-24s %-7s %-36s %s\n", r.ID, r.Action, detail, r.Merge)
+		}
+		fmt.Printf("\nRecent results (%d)\n", len(results))
+		if len(results) == 0 {
+			fmt.Println("  (empty)")
+		}
+		for _, r := range results {
+			status := "failed"
+			if r.OK {
+				status = "ok"
+			} else if r.Pending {
+				status = "pending"
+			}
+			fmt.Printf("  %-24s %-7s %-8s #%-4d %s\n", r.ID, r.Action, status, r.PR, r.Message)
+		}
+		logs, _ := q.TailLog(8)
+		if logs != "" {
+			fmt.Printf("\nLast log lines\n%s", logs)
+		}
+		return nil
+	}
+
+	if !*watch {
+		return render()
+	}
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		fmt.Print("\033[H\033[2J")
+		if err := render(); err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
 		}
 	}
 }
@@ -740,22 +885,33 @@ func cmdDoctor(ctx context.Context, args []string) error {
 func cmdInstallTask(args []string) error {
 	fs := flag.NewFlagSet("install-task", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	configPath := fs.String("config", "", "config path")
+	var configs stringList
+	fs.Var(&configs, "config", "config path (repeatable)")
 	name := fs.String("name", "Git Airlock", "scheduled task/unit name")
 	interval := fs.Duration("interval", time.Minute, "worker interval")
 	printOnly := fs.Bool("print", false, "print the generated files and commands")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	_, path, err := loadConfig(*configPath)
-	if err != nil {
-		return err
+	paths := []string(configs)
+	if len(paths) == 0 {
+		_, path, err := loadConfig("")
+		if err != nil {
+			return err
+		}
+		paths = []string{path}
+	} else {
+		for _, p := range paths {
+			if _, err := config.Load(p); err != nil {
+				return err
+			}
+		}
 	}
 	return install.Install(install.Options{
-		Name:       *name,
-		ConfigPath: path,
-		Interval:   *interval,
-		Print:      *printOnly,
+		Name:        *name,
+		ConfigPaths: paths,
+		Interval:    *interval,
+		Print:       *printOnly,
 	})
 }
 
