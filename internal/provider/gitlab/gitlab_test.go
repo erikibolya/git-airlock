@@ -52,6 +52,10 @@ func TestFindCreateGetMerge(t *testing.T) {
 	if err != nil || pr == nil || pr.Number != 5 {
 		t.Fatalf("find: %+v %v", pr, err)
 	}
+	all, err := p.FindPR(context.Background(), "feature", "main")
+	if err != nil || all == nil || all.Number != 5 {
+		t.Fatalf("find all: %+v %v", all, err)
+	}
 	created, err := p.CreatePR(context.Background(), provider.CreateRequest{Head: "feature", Base: "main", Title: "t"})
 	if err != nil || created.Number != 6 {
 		t.Fatalf("create: %+v %v", created, err)

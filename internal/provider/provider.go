@@ -49,6 +49,9 @@ type Provider interface {
 	Name() string
 	Ping(ctx context.Context) error
 	FindOpenPR(ctx context.Context, head, base string) (*PR, error)
+	// FindPR returns the newest PR for the branch pair in any state, so the
+	// worker can tell "already merged" from "needs a new PR".
+	FindPR(ctx context.Context, head, base string) (*PR, error)
 	CreatePR(ctx context.Context, req CreateRequest) (*PR, error)
 	GetPR(ctx context.Context, number int) (*PR, error)
 	Checks(ctx context.Context, pr *PR) (Checks, error)

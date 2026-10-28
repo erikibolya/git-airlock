@@ -273,14 +273,19 @@ func (a *app) openPR() {
 						return
 					}
 					merge := merges[mergeCombo.CurrentIndex()]
+					headSHA := ""
+					if out, err := exec.Command("git", "-C", a.cfg.Mirror, "rev-parse", "refs/heads/"+head).Output(); err == nil {
+						headSHA = strings.TrimSpace(string(out))
+					}
 					id, err := a.store.Enqueue(&queue.Request{
-						Action: queue.ActionOpen,
-						Head:   head,
-						Base:   base,
-						Title:  strings.TrimSpace(titleEdit.Text()),
-						Body:   bodyEdit.Text(),
-						Merge:  merge,
-						DryRun: dryCheck.Checked(),
+						Action:  queue.ActionOpen,
+						Head:    head,
+						HeadSHA: headSHA,
+						Base:    base,
+						Title:   strings.TrimSpace(titleEdit.Text()),
+						Body:    bodyEdit.Text(),
+						Merge:   merge,
+						DryRun:  dryCheck.Checked(),
 					})
 					if err != nil {
 						walk.MsgBox(dlg, "Git Airlock", err.Error(), walk.MsgBoxIconError)

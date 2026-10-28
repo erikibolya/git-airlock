@@ -26,15 +26,16 @@ const (
 
 // Request is written by the isolated host.
 type Request struct {
-	ID     string `json:"id"`
-	Action string `json:"action"`
-	Head   string `json:"head,omitempty"`
-	Base   string `json:"base,omitempty"`
-	Title  string `json:"title,omitempty"`
-	Body   string `json:"body,omitempty"`
-	Merge  string `json:"merge,omitempty"`
-	Number int    `json:"number,omitempty"`
-	DryRun bool   `json:"dry_run,omitempty"`
+	ID      string `json:"id"`
+	Action  string `json:"action"`
+	Head    string `json:"head,omitempty"`
+	HeadSHA string `json:"head_sha,omitempty"`
+	Base    string `json:"base,omitempty"`
+	Title   string `json:"title,omitempty"`
+	Body    string `json:"body,omitempty"`
+	Merge   string `json:"merge,omitempty"`
+	Number  int    `json:"number,omitempty"`
+	DryRun  bool   `json:"dry_run,omitempty"`
 }
 
 // Result is written by the worker.

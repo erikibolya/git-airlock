@@ -121,6 +121,7 @@ airlock pr status <n>
 airlock pr merge <n> --when-green
 airlock worker               sync + process the queue once
 airlock worker --loop 1m     run continuously
+airlock status [--watch]     terminal dashboard (TUI-lite)
 airlock ui                   local web dashboard
 airlock doctor               diagnose config, CA, token, VPN, scheduler
 airlock install-task         register the periodic worker
@@ -129,6 +130,18 @@ airlock instructions         print an AGENTS.md snippet
 
 `airlock pr` exit codes: `0` done, `1` failed, `3` still queued (the worker
 keeps retrying; check the result file later instead of resubmitting).
+
+### Terminal status
+
+`airlock status` prints pending requests, recent results and a log tail.
+`--watch` refreshes every two seconds (a TUI-lite for terminals); `--json`
+prints the same data for scripts.
+
+### Multiple repositories
+
+`airlock worker` and `airlock install-task` accept `--config` more than once.
+One scheduled task can drive several repositories. The desktop and web
+dashboards show one repository at a time (Change config).
 
 ## Web dashboard
 
@@ -276,7 +289,8 @@ system.
 
 ## Limitations / roadmap
 
-- One config per repository. Use one scheduler entry per repo.
+- The worker supports multiple `--config` values; the desktop and web dashboards
+  show one repository at a time.
 - The queue is either a shared directory or `refs/airlock/*` in the mirror.
   Both sides need access to the mirror; a mirror reachable only over SSH needs a
   fetch/push mode for the queue refs (roadmap).

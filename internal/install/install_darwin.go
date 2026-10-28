@@ -4,6 +4,7 @@ package install
 
 import (
 	"fmt"
+	"html"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +23,10 @@ func installDarwin(o Options) error {
 	if seconds < 60 {
 		seconds = 60
 	}
+	args := fmt.Sprintf("    <string>%s</string>\n    <string>worker</string>\n", html.EscapeString(o.ExePath))
+	for _, p := range o.ConfigPaths {
+		args += fmt.Sprintf("    <string>--config</string>\n    <string>%s</string>\n", html.EscapeString(p))
+	}
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -29,16 +34,12 @@ func installDarwin(o Options) error {
   <key>Label</key><string>%s</string>
   <key>ProgramArguments</key>
   <array>
-    <string>%s</string>
-    <string>worker</string>
-    <string>--config</string>
-    <string>%s</string>
-  </array>
+%s  </array>
   <key>StartInterval</key><integer>%d</integer>
   <key>RunAtLoad</key><true/>
 </dict>
 </plist>
-`, label, o.ExePath, o.ConfigPath, seconds)
+`, label, args, seconds)
 
 	if o.Print {
 		fmt.Printf("Write %s:\n%s\nRun: launchctl load -w %s\n", plistPath, plist, plistPath)
