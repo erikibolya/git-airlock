@@ -12,10 +12,9 @@
 
 - Signed in-app updates. Releases publish `latest.json` with the Windows
   installer URL, SHA256 and an Ed25519 signature. The desktop app checks it on
-  startup and via **Help → Check for updates…**, offers Install now / Later /
-  Skip this version, verifies the signature and checksum, runs the installer in
-  silent mode and restarts itself. `airlock-desktop --check-updates` is a
-  headless diagnostic.
+  startup and via **Help → Check for updates…**, offers Install now / Later,
+  verifies the signature and checksum, runs the installer in silent mode and
+  restarts itself. `airlock-desktop --check-updates` is a headless diagnostic.
 - The desktop version is embedded by the build (`-X main.version`).
 
 ## 1.6.3 — 2026-10-28

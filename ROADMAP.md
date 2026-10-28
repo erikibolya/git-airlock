@@ -59,6 +59,9 @@
   menu.
 - **v1.7** — signed in-app updates: `latest.json` with an Ed25519 signature,
   startup and menu checks, verified installer download and restart.
+- **v1.7.1** — the repository picker uses same-origin HTTP endpoints instead of
+  Wails bindings (which the server-rendered pages do not load), fixing
+  **Open dashboard**, **Add config…**, **remove** and **Cancel**.
 
 ## Next
 
@@ -68,17 +71,20 @@ Toasts are shipped for merged/failed requests. Windows "Do Not Disturb" hides
 the banner (the notification still lands in the action center); a future
 improvement could add per-event filtering or an "urgent" toast.
 
-### Labels and review automation
-
-Optional labels (`airlock:auto-merge`), reviewers, and a "merge only when
-approved" policy.
-
 ### Linux packages
 
 Homebrew covers Linux and macOS; distribution packages (deb/rpm) are still
 missing.
 
-### Gitea Actions coverage
+### Code signing and update polish
 
-The integration test now runs a real `act_runner` in host mode. Extending it with
-a Docker-in-Docker runner would cover container jobs as well.
+The Windows installer is unsigned, so SmartScreen and Defender's ML heuristics
+can warn about it. Authenticode signing would remove that friction. Possible
+follow-ups: a three-button update prompt (Install / Later / Skip this version),
+release-channel selection (stable/beta) and an in-app update banner instead of
+a native dialog.
+
+### Notifications, labels and review automation
+
+Per-event filtering or an "urgent" toast; optional labels
+(`airlock:auto-merge`), reviewers, and a "merge only when approved" policy.

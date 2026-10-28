@@ -25,9 +25,24 @@ leaves the workstation.
                queue/results ◄─────────────┘         (create, checks, merge)
 ```
 
-Git Airlock is stable at **1.0**: the CLI, config format, queue refs and
+Git Airlock is stable at **1.7**: the CLI, config format, queue refs and
 dashboard are covered by tests and have been used in production since 0.9.
 See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
+## Screenshots
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+The repository detail page and the picker:
+
+| Repository | Repositories |
+| --- | --- |
+| ![Repository](docs/screenshots/repository.png) | ![Repositories](docs/screenshots/repositories.png) |
+
+The desktop app is a native window (WebView2 on Windows); all buttons write to
+the same queue as the CLI. The **Repositories** screen is also reachable from
+the dashboard header and from the native menu.
+
 
 ## Why not just a VPN / tunnel?
 
@@ -64,9 +79,10 @@ scoop install git-airlock/git-airlock
 ```
 
 The winget manifest for `ErikIbolya.GitAirlock` is in
-[microsoft/winget-pkgs#464029](https://github.com/microsoft/winget-pkgs/pull/464029);
-once merged, install it with `winget install ErikIbolya.GitAirlock`. The
-manifests are generated from [`packaging/`](packaging).
+[microsoft/winget-pkgs#464029](https://github.com/microsoft/winget-pkgs/pull/464029)
+(still in Microsoft review as of 1.7.1); once merged, install it with
+`winget install ErikIbolya.GitAirlock`. The manifests are generated from
+[`packaging/`](packaging).
 
 Windows also has a one-click installer, `GitAirlockSetup-<version>.exe`. It
 installs the CLI, the desktop dashboard, a Start-menu and desktop shortcut, and
@@ -161,6 +177,7 @@ airlock ui [--config ...]...  local web dashboard (one or more repos)
 airlock doctor               diagnose config, CA, token, VPN, scheduler
 airlock install-task         register the periodic worker
 airlock instructions         print an AGENTS.md snippet
+airlock version              print the build version
 ```
 
 `airlock pr` exit codes: `0` done, `1` failed, `3` still queued (the worker
@@ -198,8 +215,9 @@ The dashboard opens on a **repository list** with the worker state (idle,
 working, or waiting for CI), the repositories it watches, pending counts and
 last activity. Click a repository for its **overview**: state with an activity
 bar, mirror and base branch, requests in progress with their checks, and recent
-activity. Pages refresh themselves every 15 seconds. Manual actions (open/check/merge PR, immediate sync) live on a
-separate **manual** page, because automatic pull requests handle normal work.
+activity. Pages refresh themselves every minute. Manual actions (open/check/
+merge PR, immediate sync) live on a separate **manual** page, because automatic
+pull requests handle normal work.
 **logs** shows that repository's worker log (one file per mirror under the cache directory).
 
 It never holds the API token and never calls the git host: buttons only write
@@ -258,15 +276,16 @@ on the VPN-connected worker.
 Windows, WebKitGTK on Linux, WKWebView on macOS): no browser tab, no local
 server to keep running. It reads the same configs and queues as the CLI, adds a
 notification-area icon with **Open dashboard**, **Repositories…**, **Sync now**
-and **Quit**, and hides to the tray when you close the window. The tray menu
-also shows the latest worker result (click it to open the dashboard) and the
-tooltip follows it; it refreshes every 30 seconds. Merged or failed requests
-raise a native notification: a Windows toast (the installer registers the
-AppUserModelID on the Start-menu shortcut), `notify-send` on Linux, or the
-Notification Center on macOS. Use `airlock-desktop.exe --notify-test` to check
-the setup. Windows "Do Not Disturb" hides the banner but keeps it in the
-notification center. It never holds
-the API token; the scheduled worker still performs the sync and the API calls.
+and **Quit**, a native **File / View / Help** menu (Dashboard, Repositories…,
+Sync now, Quit, Manual, Logs, Check for updates…, GitHub, About), and hides to
+the tray when you close the window. The tray menu also shows the latest worker
+result (click it to open the dashboard) and the tooltip follows it; it refreshes
+every 30 seconds. Merged or failed requests raise a native notification: a
+Windows toast (the installer registers the AppUserModelID on the Start-menu
+shortcut), `notify-send` on Linux, or the Notification Center on macOS. Use
+`airlock-desktop.exe --notify-test` to check the setup. Windows "Do Not Disturb"
+hides the banner but keeps it in the notification center. It never holds the API
+token; the scheduled worker still performs the sync and the API calls.
 
 ```powershell
 airlock-desktop.exe --config Z:\repos\Acme\Au.Net\.airlock.windows.toml
@@ -467,19 +486,19 @@ system.
 
 ## Limitations / roadmap
 
-- The worker supports multiple `--config` values; the desktop and web dashboards
-  show one repository at a time.
-- `queue_remote` carries the queue refs over SSH without a shared queue folder;
-  the mirror used by `sync` is still a local path or clone. Syncing the commits
-  themselves over SSH is not implemented yet.
-- The worker polls; it is not an event-driven service.
-- Gitea, GitHub and GitLab are supported today.
-- No PR review automation, labels, or release automation (beyond GitHub
-  releases of Airlock itself).
+- The worker polls every minute; it is not an event-driven service.
+- Gitea, GitHub and GitLab are supported today. There is no review automation,
+  labels or approval policy yet.
 - The web dashboard is loopback-first; LAN exposure requires an access token.
-  The desktop app is shipped as a Windows installer; Linux/macOS builds work but
-  are not packaged. The CLI and the queue remain the source of truth; the UIs
-  are conveniences.
+- The desktop app is packaged as a Windows installer only; Linux/macOS builds
+  work but are not packaged. The CLI and the queue remain the source of truth;
+  the UIs are conveniences.
+- Automatic updates run on Windows only. Homebrew, Scoop and winget users
+  upgrade through their package manager.
+- The Windows installer is not Authenticode-signed yet, so SmartScreen and
+  occasional Defender ML heuristics may warn about it. The updater still verifies
+  the Ed25519 signature and SHA256 of every download.
+- See [ROADMAP.md](ROADMAP.md) for labels, code signing and Linux packages.
 
 ## Development
 
@@ -499,6 +518,10 @@ go build ./...
 
 The tests cover both queue transports, fast-forward sync (including divergence),
 all three provider adapters, and the worker's pending/merge state machine.
+
+[AGENTS.md](AGENTS.md) is the working guide for coding agents (repo map,
+environment, gotchas) and [docs/RELEASING.md](docs/RELEASING.md) is the release
+checklist, including the update-signing key.
 
 The end-to-end test in [`test/integration`](test/integration) starts Gitea and a
 real `act_runner` in Docker, pushes from the isolated side, runs the real
