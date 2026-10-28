@@ -52,6 +52,8 @@
   workspace volume, act_runner `container.docker_host`).
 - **v1.6.1** — a repositories link in the dashboard header; the desktop app
   serves the native picker there.
+- **v1.6.2** — a native File/View/Help menu in the desktop window with
+  repositories, sync, manual, logs, GitHub, about and quit.
 
 ## Next
 

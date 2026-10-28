@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.2 — 2026-10-28
+
+- A native application menu in the desktop window: File (Dashboard,
+  Repositories…, Sync now, Quit), View (Manual, Logs) and Help (GitHub, About).
+  All tray actions are available in the app itself; the tray remains for
+  background use.
+
 ## 1.6.1 — 2026-10-28
 
 - The dashboard header has a **repositories** link. In the desktop app it opens
