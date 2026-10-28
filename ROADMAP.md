@@ -54,6 +54,9 @@
   serves the native picker there.
 - **v1.6.2** — a native File/View/Help menu in the desktop window with
   repositories, sync, manual, logs, GitHub, about and quit.
+- **v1.6.3** — batched queue reads (`cat-file --batch`) for fast dashboard
+  loads on SMB, a 60-second refresh and direct in-app navigation from the native
+  menu.
 
 ## Next
 
