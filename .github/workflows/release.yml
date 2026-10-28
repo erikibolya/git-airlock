@@ -54,7 +54,11 @@ jobs:
           go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "dist/${bin}" ./cmd/airlock
           cp README.md LICENSE dist/
           if [ "$GOOS" = "windows" ]; then
-            (cd dist && zip -q -r "${name}.zip" "${bin}" README.md LICENSE)
+            GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
+              go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=${VERSION}" \
+              -o "dist/airlock-desktop.exe" ./cmd/airlock-desktop
+            (cd dist && zip -q -r "${name}.zip" "${bin}" airlock-desktop.exe README.md LICENSE)
+            (cd dist && zip -q -r "airlock-desktop-windows-amd64.zip" airlock-desktop.exe README.md LICENSE)
           else
             mv "dist/${bin}" "dist/${name}"
             tar -C dist -czf "dist/${name}.tar.gz" "${name}" README.md LICENSE
