@@ -60,8 +60,9 @@ approved" policy.
 
 ### Packaging
 
-Homebrew, Scoop/winget and prebuilt archives are partially covered by GitHub
-Releases; add package-manager manifests.
+The Windows installer covers the direct-download case (CLI, desktop app,
+autostart, worker task). Homebrew, Scoop/winget and Linux packages are still
+missing.
 
 ### Integration tests
 
