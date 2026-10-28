@@ -64,6 +64,7 @@ func (g *GitStore) Enqueue(req *Request) (string, error) {
 	if _, err := g.git(context.Background(), "", "update-ref", requestsRef+req.ID, sha); err != nil {
 		return "", err
 	}
+	relaxRef(filepath.Join(g.repo, filepath.FromSlash(requestsRef+req.ID)))
 	return req.ID, nil
 }
 
@@ -119,8 +120,11 @@ func (g *GitStore) WriteResult(res *Result) error {
 	if err != nil {
 		return err
 	}
-	_, err = g.git(context.Background(), "", "update-ref", resultsRef+res.ID, sha)
-	return err
+	if _, err = g.git(context.Background(), "", "update-ref", resultsRef+res.ID, sha); err != nil {
+		return err
+	}
+	relaxRef(filepath.Join(g.repo, filepath.FromSlash(resultsRef+res.ID)))
+	return nil
 }
 
 func (g *GitStore) ReadResult(id string) (*Result, error) {
