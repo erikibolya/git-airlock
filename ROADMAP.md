@@ -26,6 +26,11 @@
 - **v0.8.1** — status-first dashboard: an overview with the worker state, the
   watched repository, in-progress checks and recent activity; manual request
   forms moved to their own page.
+- **v0.9** — multi-repository dashboards: the default page lists every watched
+  repository (state, pending count, last activity, auto PR, base) and each row
+  opens a detail page. `airlock ui` accepts repeated `--config`; the desktop
+  app has a repository picker (tray → Repositories…) that also updates the
+  scheduled worker to the same list.
 
 ## Next
 
@@ -42,12 +47,6 @@ the MCP server is not implemented yet.
 The queue can already travel over SSH; the commit mirror used by `sync` still
 needs a local path/clone. Add a managed mirror cache so the whole flow can use
 `ssh://` for both commits and queue refs.
-
-### Multi-repository dashboards
-
-The worker supports many configs; the desktop and web dashboards still show one
-repository at a time (Change config). Add a config list and a repository
-selector.
 
 ### Notifications
 

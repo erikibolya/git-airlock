@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	goruntime "runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,34 +23,42 @@ import (
 
 	"github.com/erikibolya/git-airlock/internal/config"
 	"github.com/erikibolya/git-airlock/internal/gitutil"
+	"github.com/erikibolya/git-airlock/internal/install"
 	"github.com/erikibolya/git-airlock/internal/ui"
 )
 
 //go:embed tray.ico tray.png
 var trayFS embed.FS
 
-// handlerBox lets the setup page swap in the real dashboard without a restart.
-type handlerBox struct{ h http.Handler }
+type dashBox struct {
+	dash    *ui.Dashboard
+	handler http.Handler
+	cfgs    []*config.Config
+	paths   []string
+}
 
 func main() {
-	cfgPath := argValue("--config")
-	if cfgPath == "" {
-		cfgPath = loadSavedConfig()
+	argPaths := argValues("--config")
+	paths := argPaths
+	if len(paths) == 0 {
+		paths = loadSavedConfigs()
 	}
-	if cfgPath == "" {
+	if len(paths) == 0 {
 		if p, err := config.Resolve(""); err == nil {
-			cfgPath = p
+			paths = []string{p}
 		}
 	}
-	app := &App{
-		cfgPath:     cfgPath,
-		startHidden: hasFlag("--tray") || hasFlag("--minimized"),
+
+	app := &App{startHidden: hasFlag("--tray") || hasFlag("--minimized"), paths: paths}
+	if hasFlag("--repos") || hasFlag("--setup") {
+		app.setupMode.Store(true)
 	}
-	app.reload()
-	if app.cfg != nil && cfgPath != "" {
-		// Remember only configs that actually load, so a bad --config does not
-		// overwrite a working choice.
-		_ = saveConfigPath(cfgPath)
+	if box, err := buildBox(paths); err == nil {
+		app.current.Store(box)
+		_ = saveConfigs(paths)
+	} else {
+		app.loadErrs = []string{err.Error()}
+		app.setupMode.Store(true)
 	}
 
 	err := wails.Run(&options.App{
@@ -78,63 +87,59 @@ func main() {
 	}
 }
 
-// App is the Wails application: it serves the existing web dashboard and adds
-// a tray icon, a setup screen, and a native sync action.
+// App is the Wails application: it serves the multi-repository dashboard and
+// adds a tray icon, a repository picker and a native sync action.
 type App struct {
-	cfgPath     string
 	startHidden bool
 
-	cfg   *config.Config
-	srv   *ui.Server
-	loadE string
+	mu       sync.Mutex
+	paths    []string
+	loadErrs []string
 
-	handler atomic.Pointer[handlerBox]
-	ctx     context.Context
+	current   atomic.Pointer[dashBox]
+	setupMode atomic.Bool
+
+	ctx      context.Context
 	quitting atomic.Bool
 	tray     atomic.Bool
 	syncMu   sync.Mutex
 	syncItem *systray.MenuItem
 }
 
-// ServeHTTP is the Wails asset handler. It forwards to the setup screen until a
-// valid config is available, then to the dashboard.
+func buildBox(paths []string) (*dashBox, error) {
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("add at least one .airlock.toml")
+	}
+	var cfgs []*config.Config
+	for _, p := range paths {
+		cfg, err := config.Load(p)
+		if err != nil {
+			return nil, err
+		}
+		cfgs = append(cfgs, cfg)
+	}
+	dash, err := ui.NewDashboard(cfgs, "")
+	if err != nil {
+		return nil, err
+	}
+	return &dashBox{dash: dash, handler: dash.Handler(), cfgs: cfgs, paths: paths}, nil
+}
+
+// ServeHTTP is the Wails asset handler. The repository picker takes over while
+// setupMode is set or until at least one config loads.
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if hb := a.handler.Load(); hb != nil {
-		hb.h.ServeHTTP(w, r)
-		return
+	if !a.setupMode.Load() {
+		if box := a.current.Load(); box != nil {
+			box.handler.ServeHTTP(w, r)
+			return
+		}
 	}
 	a.serveSetup(w, r)
 }
 
-func (a *App) setHandler(h http.Handler) {
-	a.handler.Store(&handlerBox{h: h})
-}
-
-// reload validates the current config (if any) and installs the matching
-// handler. A failed reload leaves the setup screen in place.
-func (a *App) reload() {
-	a.cfg, a.srv, a.loadE = nil, nil, ""
-	if a.cfgPath == "" {
-		a.loadE = "No .airlock.toml selected yet."
-		return
-	}
-	cfg, err := config.Load(a.cfgPath)
-	if err != nil {
-		a.loadE = err.Error()
-		return
-	}
-	srv, err := ui.New(cfg, "")
-	if err != nil {
-		a.loadE = err.Error()
-		return
-	}
-	a.cfg, a.srv = cfg, srv
-	a.setHandler(srv.Handler())
-}
-
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	if a.cfg == nil {
+	if a.current.Load() == nil {
 		// An autostarted app must not hide a broken configuration in the tray.
 		wailsruntime.WindowShow(ctx)
 	}
@@ -172,7 +177,7 @@ func (a *App) shutdown(context.Context) {
 	}
 }
 
-// ---------- setup screen ----------
+// ---------- repository picker ----------
 
 // PickResult is returned to the setup page.
 type PickResult struct {
@@ -180,12 +185,15 @@ type PickResult struct {
 	Error string `json:"error"`
 }
 
-// PickConfig opens a native file dialog for an .airlock.toml.
-func (a *App) PickConfig() PickResult {
+// AddConfig opens a native file dialog, validates the config and appends it.
+func (a *App) AddConfig() PickResult {
 	dir := ""
-	if a.cfgPath != "" {
-		dir = filepath.Dir(a.cfgPath)
+	a.mu.Lock()
+	if len(a.paths) > 0 {
+		dir = filepath.Dir(a.paths[len(a.paths)-1])
 	}
+	a.mu.Unlock()
+
 	path, err := wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Title:            "Select .airlock.toml",
 		DefaultDirectory: dir,
@@ -196,41 +204,129 @@ func (a *App) PickConfig() PickResult {
 	if err != nil {
 		return PickResult{Error: err.Error()}
 	}
+	if path == "" {
+		return PickResult{}
+	}
+	if _, err := config.Load(path); err != nil {
+		return PickResult{Error: err.Error()}
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, p := range a.paths {
+		if p == path {
+			return PickResult{Path: path}
+		}
+	}
+	a.paths = append(a.paths, path)
+	a.loadErrs = nil
+	_ = saveConfigs(a.paths)
 	return PickResult{Path: path}
 }
 
-// ApplyConfig validates the chosen config, saves it for the next launch and
-// swaps the dashboard in without restarting.
-func (a *App) ApplyConfig(path string) PickResult {
-	if path == "" {
-		return PickResult{Error: "Enter a config path or use Browse."}
+// RemoveConfig drops a config from the list.
+func (a *App) RemoveConfig(path string) PickResult {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := a.paths[:0]
+	for _, p := range a.paths {
+		if p != path {
+			out = append(out, p)
+		}
 	}
-	if cfg, err := config.Load(path); err != nil {
+	a.paths = out
+	a.loadErrs = nil
+	_ = saveConfigs(a.paths)
+	return PickResult{}
+}
+
+// Start validates the current list, updates the worker task and opens the
+// dashboard without restarting the process.
+func (a *App) Start() PickResult {
+	a.mu.Lock()
+	paths := append([]string(nil), a.paths...)
+	a.mu.Unlock()
+	if len(paths) == 0 {
+		return PickResult{Error: "Add at least one config first."}
+	}
+	box, err := buildBox(paths)
+	if err != nil {
+		a.mu.Lock()
+		a.loadErrs = []string{err.Error()}
+		a.mu.Unlock()
 		return PickResult{Error: err.Error()}
-	} else if _, err := ui.New(cfg, ""); err != nil {
-		return PickResult{Error: err.Error()}
 	}
-	a.cfgPath = path
-	a.reload()
-	if a.cfg == nil {
-		return PickResult{Error: a.loadE}
+	if err := updateWorkerTask(paths); err != nil {
+		return PickResult{Error: "worker task: " + err.Error()}
 	}
-	if err := saveConfigPath(path); err != nil {
-		return PickResult{Error: err.Error()}
-	}
+	a.current.Store(box)
+	_ = saveConfigs(paths)
+	a.setupMode.Store(false)
 	if a.syncItem != nil {
 		a.syncItem.Enable()
 	}
-	return PickResult{Path: path}
+	return PickResult{}
+}
+
+// Cancel returns to the dashboard when one is already configured.
+func (a *App) Cancel() {
+	if a.current.Load() != nil {
+		a.setupMode.Store(false)
+	}
+}
+
+// updateWorkerTask points the scheduled worker at the same repositories. It is
+// skipped for dev builds that do not ship airlock.exe next to the desktop exe.
+func updateWorkerTask(paths []string) error {
+	if goruntime.GOOS != "windows" {
+		return nil
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return nil
+	}
+	exe := filepath.Join(filepath.Dir(self), "airlock.exe")
+	if _, err := os.Stat(exe); err != nil {
+		return nil
+	}
+	return install.Install(install.Options{
+		Name:        "Git Airlock",
+		ConfigPaths: paths,
+		ExePath:     exe,
+		Interval:    time.Minute,
+	})
 }
 
 func (a *App) serveSetup(w http.ResponseWriter, _ *http.Request) {
-	msg := "Select the .airlock.toml that describes this repository."
-	if a.loadE != "" {
-		msg = a.loadE
+	a.mu.Lock()
+	paths := append([]string(nil), a.paths...)
+	loadErrs := append([]string(nil), a.loadErrs...)
+	a.mu.Unlock()
+
+	msg := "Add the repositories this dashboard should watch. Each one needs its own .airlock.toml."
+	if len(loadErrs) > 0 {
+		msg = strings.Join(loadErrs, "\n")
 	}
+	var list strings.Builder
+	for _, p := range paths {
+		esc := html.EscapeString(p)
+		fmt.Fprintf(&list, `<li><code>%s</code><button class="remove" data-path="%s">remove</button></li>`, esc, esc)
+	}
+	listHTML := `<p class="empty">No configs yet.</p>`
+	if list.Len() > 0 {
+		listHTML = `<ul class="repos">` + list.String() + `</ul>`
+	}
+	cancelHTML := ""
+	if a.current.Load() != nil {
+		cancelHTML = `<button id="cancel">Cancel</button>`
+	}
+	page := strings.NewReplacer(
+		"{{MSG}}", html.EscapeString(msg),
+		"{{LIST}}", listHTML,
+		"{{CANCEL}}", cancelHTML,
+	).Replace(setupHTML)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, setupHTML, html.EscapeString(msg), html.EscapeString(a.cfgPath))
+	_, _ = w.Write([]byte(page))
 }
 
 const setupHTML = `<!doctype html>
@@ -238,23 +334,16 @@ const setupHTML = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Git Airlock — setup</title>
+<title>Git Airlock — repositories</title>
 <style>
   :root { color-scheme: light; }
-  body { margin:0; padding:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
-         background:#f6f8fb; color:#0f172a; }
-  main { max-width:720px; margin:0 auto; padding:48px 24px; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background:#f6f8fb; color:#0f172a; }
+  main { max-width:760px; margin:0 auto; padding:48px 24px; }
   h1 { font-size:26px; margin:0 0 4px; }
   .sub { color:#475569; margin:0 0 28px; }
-  .card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:24px;
-          box-shadow:0 1px 2px rgba(15,23,42,.05); }
+  .card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:24px; box-shadow:0 1px 2px rgba(15,23,42,.05); }
   label { display:block; font-weight:600; font-size:13px; margin-bottom:6px; }
-  .row { display:flex; gap:8px; }
-  input[type=text] { flex:1; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px;
-                     font:13px/1.4 ui-monospace, "Cascadia Code", monospace; background:#f8fafc; }
-  input[type=text]:focus { outline:2px solid #2563eb33; border-color:#2563eb; background:#fff; }
-  button { padding:10px 16px; border-radius:8px; border:1px solid #cbd5e1; background:#fff;
-           font:600 13px system-ui; cursor:pointer; }
+  button { padding:10px 16px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; font:600 13px system-ui; cursor:pointer; }
   button:hover { background:#f1f5f9; }
   button.primary { background:#2563eb; border-color:#2563eb; color:#fff; }
   button.primary:hover { background:#1d4ed8; }
@@ -264,61 +353,77 @@ const setupHTML = `<!doctype html>
   .status.ok { color:#047857; }
   .hint { margin-top:22px; font-size:13px; color:#64748b; }
   code { background:#f1f5f9; padding:1px 5px; border-radius:4px; }
-  .msg { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:10px;
-         padding:12px 14px; font-size:13px; margin-bottom:20px; white-space:pre-wrap;
-         word-break:break-word; }
+  .msg { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:10px; padding:12px 14px; font-size:13px; margin-bottom:20px; white-space:pre-wrap; word-break:break-word; }
+  ul.repos { list-style:none; margin:0; padding:0; }
+  ul.repos li { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid #e2e8f0; }
+  ul.repos li:last-child { border-bottom:0; }
+  ul.repos code { font-size:12px; word-break:break-all; }
+  button.remove { border:0; background:none; color:#b91c1c; padding:4px 6px; font-size:12px; }
+  button.remove:hover { background:#fef2f2; }
+  .empty { color:#64748b; font-size:13px; margin:0; }
 </style>
 </head>
 <body>
 <main>
   <h1>Git Airlock</h1>
-  <p class="sub">Synchronises a mirror across the air gap and merges pull requests.</p>
-  <div class="msg">%s</div>
+  <p class="sub">Synchronises mirrors across the air gap and merges pull requests.</p>
+  <div class="msg">{{MSG}}</div>
   <div class="card">
-    <label for="path">Configuration file</label>
-    <div class="row">
-      <input id="path" type="text" autofocus spellcheck="false"
-             placeholder="C:\path\to\.airlock.toml" value="%s">
-      <button id="browse">Browse…</button>
+    <label>Repositories</label>
+    {{LIST}}
+    <div class="actions" style="justify-content:flex-start;margin-top:14px">
+      <button id="add">Add config…</button>
     </div>
     <div class="actions">
-      <button id="apply" class="primary">Use this config</button>
+      {{CANCEL}}
+      <button id="start" class="primary">Open dashboard</button>
     </div>
     <div id="status" class="status"></div>
-    <p class="hint">Create a config with <code>airlock init</code>. The path is remembered,
-    so you only need this screen once.</p>
+    <p class="hint">The scheduled worker is pointed at the same list, so these repositories are
+    watched every minute. Create a config with <code>airlock init</code>.</p>
   </div>
 </main>
 <script>
 (function () {
-  var input = document.getElementById('path');
   var status = document.getElementById('status');
-  function say(text, cls) {
-    status.textContent = text || '';
-    status.className = 'status' + (cls ? ' ' + cls : '');
-  }
+  function say(text, cls) { status.textContent = text || ''; status.className = 'status' + (cls ? ' ' + cls : ''); }
   function bind() { return window.go && window.go.main && window.go.main.App; }
-  document.getElementById('browse').addEventListener('click', function () {
+  document.getElementById('add').addEventListener('click', function () {
     var app = bind();
     if (!app) { say('Native bindings are still loading, try again.', 'err'); return; }
-    app.PickConfig().then(function (r) {
+    app.AddConfig().then(function (r) {
       if (r && r.error) { say(r.error, 'err'); return; }
-      if (r && r.path) { input.value = r.path; say(''); }
+      if (r && r.path) { window.location.reload(); }
     }).catch(function (e) { say(String(e), 'err'); });
   });
-  document.getElementById('apply').addEventListener('click', function () {
+  var buttons = document.querySelectorAll('button.remove');
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].addEventListener('click', function () {
+      var app = bind();
+      if (!app) { say('Native bindings are still loading, try again.', 'err'); return; }
+      app.RemoveConfig(this.getAttribute('data-path')).then(function () { window.location.reload(); })
+        .catch(function (e) { say(String(e), 'err'); });
+    });
+  }
+  document.getElementById('start').addEventListener('click', function () {
     var app = bind();
     if (!app) { say('Native bindings are still loading, try again.', 'err'); return; }
     say('Checking…');
-    app.ApplyConfig(input.value).then(function (r) {
+    app.Start().then(function (r) {
       if (r && r.error) { say(r.error, 'err'); return; }
-      say('Configuration loaded.', 'ok');
-      setTimeout(function () { window.location.replace('/'); }, 250);
+      say('Starting…', 'ok');
+      window.location.replace('/');
     }).catch(function (e) { say(String(e), 'err'); });
   });
-  input.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Enter') { document.getElementById('apply').click(); }
-  });
+  var cancel = document.getElementById('cancel');
+  if (cancel) {
+    cancel.addEventListener('click', function () {
+      var app = bind();
+      if (!app) { return; }
+      app.Cancel();
+      window.location.replace('/');
+    });
+  }
 })();
 </script>
 </body>
@@ -344,8 +449,9 @@ func (a *App) onReady(icon []byte) {
 	systray.SetTitle("Git Airlock")
 	systray.SetTooltip("Git Airlock")
 	mOpen := systray.AddMenuItem("Open dashboard", "Show the Git Airlock window")
-	mSync := systray.AddMenuItem("Sync now", "Sync the mirror with the private remote")
-	if a.cfg != nil {
+	mRepos := systray.AddMenuItem("Repositories…", "Choose which repositories the dashboard watches")
+	mSync := systray.AddMenuItem("Sync now", "Sync mirrors with the private remote")
+	if a.current.Load() != nil {
 		mSync.Enable()
 	} else {
 		mSync.Disable()
@@ -359,6 +465,15 @@ func (a *App) onReady(icon []byte) {
 		for {
 			select {
 			case <-mOpen.ClickedCh:
+				if a.setupMode.CompareAndSwap(true, false) && a.ctx != nil {
+					wailsruntime.WindowReload(a.ctx)
+				}
+				a.showWindow()
+			case <-mRepos.ClickedCh:
+				a.setupMode.Store(true)
+				if a.ctx != nil {
+					wailsruntime.WindowReload(a.ctx)
+				}
 				a.showWindow()
 			case <-mSync.ClickedCh:
 				go a.syncNow()
@@ -378,12 +493,17 @@ func (a *App) onReady(icon []byte) {
 func (a *App) syncNow() {
 	a.syncMu.Lock()
 	defer a.syncMu.Unlock()
-	if a.cfg == nil {
+	box := a.current.Load()
+	if box == nil {
 		return
 	}
 	systray.SetTooltip("Git Airlock: syncing…")
-	report, err := gitutil.Sync(context.Background(), a.cfg.Mirror, a.cfg.Remote)
-	msg := syncMessage(report, err)
+	var parts []string
+	for _, cfg := range box.cfgs {
+		report, err := gitutil.Sync(context.Background(), cfg.Mirror, cfg.Remote)
+		parts = append(parts, cfg.Repo+": "+syncMessage(report, err))
+	}
+	msg := join(parts)
 	systray.SetTooltip(truncate("Git Airlock: "+msg, 120))
 }
 
@@ -427,7 +547,9 @@ func truncate(s string, n int) string {
 // ---------- saved state / args ----------
 
 type desktopState struct {
-	Config string `json:"config"`
+	// Config is the pre-0.9 single-repository field.
+	Config  string   `json:"config,omitempty"`
+	Configs []string `json:"configs,omitempty"`
 }
 
 func statePath() string {
@@ -438,26 +560,33 @@ func statePath() string {
 	return filepath.Join(dir, "git-airlock", "desktop.json")
 }
 
-func loadSavedConfig() string {
+func loadSavedConfigs() []string {
 	path := statePath()
 	if path == "" {
-		return ""
+		return nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return ""
+		return nil
 	}
 	var st desktopState
 	if json.Unmarshal(data, &st) != nil {
-		return ""
+		return nil
 	}
-	if _, err := os.Stat(st.Config); err != nil {
-		return ""
+	paths := st.Configs
+	if len(paths) == 0 && st.Config != "" {
+		paths = []string{st.Config}
 	}
-	return st.Config
+	var out []string
+	for _, p := range paths {
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
-func saveConfigPath(p string) error {
+func saveConfigs(paths []string) error {
 	path := statePath()
 	if path == "" {
 		return nil
@@ -465,20 +594,23 @@ func saveConfigPath(p string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	data, _ := json.MarshalIndent(desktopState{Config: p}, "", "  ")
+	data, _ := json.MarshalIndent(desktopState{Configs: paths}, "", "  ")
 	return os.WriteFile(path, data, 0o644)
 }
 
-func argValue(name string) string {
+func argValues(name string) []string {
+	var out []string
 	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == name && i+1 < len(os.Args) {
-			return os.Args[i+1]
+			out = append(out, os.Args[i+1])
+			i++
+			continue
 		}
-		if len(os.Args[i]) > len(name) && os.Args[i][:len(name)+1] == name+"=" {
-			return os.Args[i][len(name)+1:]
+		if strings.HasPrefix(os.Args[i], name+"=") {
+			out = append(out, strings.TrimPrefix(os.Args[i], name+"="))
 		}
 	}
-	return ""
+	return out
 }
 
 func hasFlag(name string) bool {

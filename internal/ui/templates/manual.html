@@ -4,7 +4,7 @@
   <div class="card">
     <h2>Open pull request</h2>
     {{if .Config.AutoPR}}<p class="muted">Auto PR is on: branches ahead of <code>{{.Config.Base}}</code> are opened and merged automatically. Use this form only for a custom title, body or merge mode.</p>{{end}}
-    <form method="post" action="/pr/open">
+    <form method="post" action="{{.BasePath}}pr/open">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
       <label for="head">Head branch</label>
       <input id="head" name="head" placeholder="feature-branch" required>
@@ -33,7 +33,7 @@
 
   <div class="card">
     <h2>Check pull request</h2>
-    <form method="post" action="/pr/status">
+    <form method="post" action="{{.BasePath}}pr/status">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
       <label for="status-number">PR number</label>
       <input id="status-number" name="number" type="number" min="1" required>
@@ -41,7 +41,7 @@
     </form>
 
     <h2 style="margin-top:1.25rem">Merge pull request</h2>
-    <form method="post" action="/pr/merge">
+    <form method="post" action="{{.BasePath}}pr/merge">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
       <label for="merge-number">PR number</label>
       <input id="merge-number" name="number" type="number" min="1" required>
@@ -53,7 +53,7 @@
   <div class="card">
     <h2>Mirror sync</h2>
     <p class="muted">Runs on this machine and needs the company VPN. The scheduled worker does this automatically; use it when you want an immediate sync.</p>
-    <form method="post" action="/sync">
+    <form method="post" action="{{.BasePath}}sync">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
       <button type="submit">Sync now</button>
     </form>
@@ -94,7 +94,7 @@
   <tbody>
   {{range .Results}}
     <tr>
-      <td><a href="/result/{{.ID}}">{{.ID}}</a></td>
+      <td><a href="{{.BasePath}}result/{{.ID}}">{{.ID}}</a></td>
       <td>{{.Action}}</td>
       <td>
         {{if .OK}}<span class="ok">ok</span>
