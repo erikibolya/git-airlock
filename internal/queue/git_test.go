@@ -4,6 +4,7 @@ import (
 	"context"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -85,5 +86,19 @@ func TestGitStoreMissingResult(t *testing.T) {
 	g := NewGit(newBare(t))
 	if _, err := g.ReadResult("nope"); err == nil {
 		t.Fatal("expected an error")
+	}
+}
+
+func TestGitStoreLogIsPerRepo(t *testing.T) {
+	a := NewGit(newBare(t))
+	b := NewGit(newBare(t))
+	if a.LogPath() == b.LogPath() {
+		t.Fatalf("two mirrors share the log path %q", a.LogPath())
+	}
+	if filepath.Base(a.LogPath()) == "worker.log" {
+		t.Fatal("log path is not repository-specific")
+	}
+	if !strings.Contains(filepath.Base(a.LogPath()), "mirror") {
+		t.Fatalf("log name is not descriptive: %s", filepath.Base(a.LogPath()))
 	}
 }

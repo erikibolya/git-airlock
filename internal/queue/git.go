@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/erikibolya/git-airlock/internal/proc"
+	"hash/fnv"
 	"os"
 	"path/filepath"
 	"sort"
@@ -238,7 +239,21 @@ func (g *GitStore) logPath() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(dir, "git-airlock", "worker.log")
+	name := strings.TrimSuffix(filepath.Base(filepath.Clean(g.repo)), ".git")
+	name = strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_', r == '.':
+			return r
+		default:
+			return '-'
+		}
+	}, name)
+	if name == "" || name == "." {
+		name = "repo"
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(g.repo))
+	return filepath.Join(dir, "git-airlock", fmt.Sprintf("worker-%s-%08x.log", name, h.Sum32()))
 }
 
 func (g *GitStore) Log(format string, args ...any) {

@@ -25,6 +25,10 @@ leaves the workstation.
                queue/results ◄─────────────┘         (create, checks, merge)
 ```
 
+Git Airlock is stable at **1.0**: the CLI, config format, queue refs and
+dashboard are covered by tests and have been used in production since 0.9.
+See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
 ## Why not just a VPN / tunnel?
 
 Because that is exactly what you are trying to avoid. A VPN client, a reverse
@@ -125,7 +129,7 @@ airlock pr status <n>
 airlock pr merge <n> --when-green
 airlock worker               sync + process the queue once
 airlock worker --loop 1m     run continuously
-airlock status [--watch]     terminal dashboard (TUI-lite)
+airlock status [--config ...]... [--watch]  terminal dashboard (TUI-lite)
 airlock ui [--config ...]...  local web dashboard (one or more repos)
 airlock doctor               diagnose config, CA, token, VPN, scheduler
 airlock install-task         register the periodic worker
@@ -169,7 +173,7 @@ last activity. Click a repository for its **overview**: state with an activity
 bar, mirror and base branch, requests in progress with their checks, and recent
 activity. Pages refresh themselves every 15 seconds. Manual actions (open/check/merge PR, immediate sync) live on a
 separate **manual** page, because automatic pull requests handle normal work.
-**logs** shows the worker log.
+**logs** shows that repository's worker log (one file per mirror under the cache directory).
 
 It never holds the API token and never calls the git host: buttons only write
 requests to the queue, exactly like the CLI. (The manual *Sync now* button is the

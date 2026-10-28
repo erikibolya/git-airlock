@@ -31,6 +31,9 @@
   opens a detail page. `airlock ui` accepts repeated `--config`; the desktop
   app has a repository picker (tray → Repositories…) that also updates the
   scheduled worker to the same list.
+- **v1.0** — stability release: per-repository worker logs, multi-repository
+  `airlock status`, cross-platform worker-task updates from the desktop picker,
+  changelog and documentation. No breaking changes since 0.9.
 
 ## Next
 

@@ -128,7 +128,7 @@ Usage:
   airlock pr status <number> [--wait 2m|--no-wait] [--config PATH]
   airlock pr merge  <number> [--when-green] [--wait 2m|--no-wait] [--config PATH]
   airlock worker    [--config PATH]... [--no-sync] [--loop 1m]
-  airlock status    [--config PATH] [--watch] [--json]
+  airlock status    [--config PATH]... [--watch] [--json]
   airlock ui        [--config PATH]... [--listen 127.0.0.1:8787]
                     [--token TOKEN] [--open]
   airlock doctor    [--config PATH]
@@ -622,74 +622,78 @@ func cmdWorker(ctx context.Context, args []string) error {
 func cmdStatus(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	configPath := fs.String("config", "", "config path")
+	var configs stringList
+	fs.Var(&configs, "config", "config path (repeatable)")
 	watch := fs.Bool("watch", false, "refresh every 2 seconds (TUI-lite)")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	cfg, _, err := loadConfig(*configPath)
-	if err != nil {
-		return err
+	paths := []string(configs)
+	if len(paths) == 0 {
+		p, err := config.Resolve("")
+		if err != nil {
+			return err
+		}
+		paths = []string{p}
 	}
-	q, err := queue.Open(cfg.Queue, cfg.Mirror, cfg.QueueRemote)
-	if err != nil {
-		return err
+	type statusRepo struct {
+		cfg *config.Config
+		q   queue.Store
 	}
-	if err := q.Ensure(); err != nil {
-		return err
+	var repos []statusRepo
+	for _, p := range paths {
+		cfg, err := config.Load(p)
+		if err != nil {
+			return err
+		}
+		q, err := queue.Open(cfg.Queue, cfg.Mirror, cfg.QueueRemote)
+		if err != nil {
+			return err
+		}
+		if err := q.Ensure(); err != nil {
+			return fmt.Errorf("%s: %w", cfg.Repo, err)
+		}
+		repos = append(repos, statusRepo{cfg: cfg, q: q})
 	}
 
 	render := func() error {
-		pending, err := q.Pending()
-		if err != nil {
-			return err
-		}
-		results, err := q.ListResults(20)
-		if err != nil {
-			return err
-		}
 		if *asJSON {
-			data, err := json.MarshalIndent(map[string]any{
-				"repo": cfg.Repo, "provider": cfg.Provider, "pending": pending, "results": results,
-			}, "", "  ")
+			out := make([]map[string]any, 0, len(repos))
+			for _, r := range repos {
+				pending, err := r.q.Pending()
+				if err != nil {
+					return err
+				}
+				results, err := r.q.ListResults(20)
+				if err != nil {
+					return err
+				}
+				out = append(out, map[string]any{
+					"repo": r.cfg.Repo, "provider": r.cfg.Provider,
+					"pending": pending, "results": results,
+				})
+			}
+			var data []byte
+			var err error
+			if len(out) == 1 {
+				data, err = json.MarshalIndent(out[0], "", "  ")
+			} else {
+				data, err = json.MarshalIndent(out, "", "  ")
+			}
 			if err != nil {
 				return err
 			}
 			fmt.Println(string(data))
 			return nil
 		}
-		fmt.Printf("Git Airlock · %s · %s\n", cfg.Repo, cfg.Provider)
-		fmt.Printf("mirror: %s\nqueue:  %s\n\n", cfg.Mirror, cfg.Queue)
-		fmt.Printf("Pending (%d)\n", len(pending))
-		if len(pending) == 0 {
-			fmt.Println("  (empty)")
-		}
-		for _, r := range pending {
-			detail := ""
-			if r.Action == queue.ActionOpen {
-				detail = r.Head + " -> " + r.Base
-			} else if r.Number > 0 {
-				detail = fmt.Sprintf("#%d", r.Number)
+		for i, r := range repos {
+			if i > 0 {
+				fmt.Println()
 			}
-			fmt.Printf("  %-24s %-7s %-36s %s\n", r.ID, r.Action, detail, r.Merge)
-		}
-		fmt.Printf("\nRecent results (%d)\n", len(results))
-		if len(results) == 0 {
-			fmt.Println("  (empty)")
-		}
-		for _, r := range results {
-			status := "failed"
-			if r.OK {
-				status = "ok"
-			} else if r.Pending {
-				status = "pending"
+			if err := renderStatus(r.cfg, r.q); err != nil {
+				return err
 			}
-			fmt.Printf("  %-24s %-7s %-8s #%-4d %s\n", r.ID, r.Action, status, r.PR, r.Message)
-		}
-		logs, _ := q.TailLog(8)
-		if logs != "" {
-			fmt.Printf("\nLast log lines\n%s", logs)
 		}
 		return nil
 	}
@@ -710,6 +714,50 @@ func cmdStatus(ctx context.Context, args []string) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+func renderStatus(cfg *config.Config, q queue.Store) error {
+	pending, err := q.Pending()
+	if err != nil {
+		return err
+	}
+	results, err := q.ListResults(20)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Git Airlock · %s · %s\n", cfg.Repo, cfg.Provider)
+	fmt.Printf("mirror: %s\nqueue:  %s\n\n", cfg.Mirror, cfg.Queue)
+	fmt.Printf("Pending (%d)\n", len(pending))
+	if len(pending) == 0 {
+		fmt.Println("  (empty)")
+	}
+	for _, r := range pending {
+		detail := ""
+		if r.Action == queue.ActionOpen {
+			detail = r.Head + " -> " + r.Base
+		} else if r.Number > 0 {
+			detail = fmt.Sprintf("#%d", r.Number)
+		}
+		fmt.Printf("  %-24s %-7s %-36s %s\n", r.ID, r.Action, detail, r.Merge)
+	}
+	fmt.Printf("\nRecent results (%d)\n", len(results))
+	if len(results) == 0 {
+		fmt.Println("  (empty)")
+	}
+	for _, r := range results {
+		status := "failed"
+		if r.OK {
+			status = "ok"
+		} else if r.Pending {
+			status = "pending"
+		}
+		fmt.Printf("  %-24s %-7s %-8s #%-4d %s\n", r.ID, r.Action, status, r.PR, r.Message)
+	}
+	logs, _ := q.TailLog(8)
+	if logs != "" {
+		fmt.Printf("\nLast log lines\n%s", logs)
+	}
+	return nil
 }
 
 // ---------- ui ----------
