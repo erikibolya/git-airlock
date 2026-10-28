@@ -24,6 +24,7 @@ import (
 	"github.com/erikibolya/git-airlock/internal/config"
 	"github.com/erikibolya/git-airlock/internal/gitutil"
 	"github.com/erikibolya/git-airlock/internal/install"
+	"github.com/erikibolya/git-airlock/internal/proc"
 	"github.com/erikibolya/git-airlock/internal/provider"
 	"github.com/erikibolya/git-airlock/internal/provider/gitea"
 	"github.com/erikibolya/git-airlock/internal/provider/github"
@@ -406,7 +407,7 @@ func cmdPROpen(ctx context.Context, args []string) error {
 		return fmt.Errorf("head and base are both %q; check out a feature branch or pass --head/--base", base)
 	}
 	headSHA := ""
-	if out, err := exec.Command("git", "-C", root, "rev-parse", head).Output(); err == nil {
+	if out, err := proc.Command("git", "-C", root, "rev-parse", head).Output(); err == nil {
 		headSHA = strings.TrimSpace(string(out))
 	}
 	title := *titleFlag
@@ -825,7 +826,7 @@ func cmdDoctor(ctx context.Context, args []string) error {
 	}
 
 	check("mirror exists", func() error {
-		cmd := exec.CommandContext(ctx, "git", "-C", cfg.Mirror, "rev-parse", "--is-bare-repository")
+		cmd := proc.CommandContext(ctx, "git", "-C", cfg.Mirror, "rev-parse", "--is-bare-repository")
 		out, err := cmd.Output()
 		if err != nil {
 			return err
@@ -838,7 +839,7 @@ func cmdDoctor(ctx context.Context, args []string) error {
 	check("private remote reachable", func() error {
 		cmdCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(cmdCtx, "git", "-C", cfg.Mirror, "ls-remote", cfg.Remote, "HEAD")
+		cmd := proc.CommandContext(cmdCtx, "git", "-C", cfg.Mirror, "ls-remote", cfg.Remote, "HEAD")
 		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 		return cmd.Run()
 	})

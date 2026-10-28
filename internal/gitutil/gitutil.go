@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/erikibolya/git-airlock/internal/proc"
 )
 
 const (
@@ -303,7 +305,7 @@ func revParse(ctx context.Context, dir, ref string) (string, error) {
 }
 
 func isAncestor(ctx context.Context, dir, a, b string) (bool, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", dir, "merge-base", "--is-ancestor", a, b)
+	cmd := proc.CommandContext(ctx, "git", "-C", dir, "merge-base", "--is-ancestor", a, b)
 	err := cmd.Run()
 	if err == nil {
 		return true, nil
@@ -318,7 +320,7 @@ func isAncestor(ctx context.Context, dir, a, b string) (bool, error) {
 func run(ctx context.Context, dir string, timeout time.Duration, network bool, args ...string) (string, error) {
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(runCtx, "git", args...)
+	cmd := proc.CommandContext(runCtx, "git", args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}

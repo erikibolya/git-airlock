@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/gofrs/flock"
 
 	"github.com/erikibolya/git-airlock/internal/config"
+	"github.com/erikibolya/git-airlock/internal/proc"
 	"github.com/erikibolya/git-airlock/internal/provider"
 	"github.com/erikibolya/git-airlock/internal/queue"
 )
@@ -332,7 +332,7 @@ func (w *Worker) baseContains(sha, base string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ref := "refs/remotes/" + w.Cfg.Remote + "/" + base
-	return exec.CommandContext(ctx, "git", "-C", w.Cfg.Mirror, "merge-base", "--is-ancestor", sha, ref).Run() == nil
+	return proc.CommandContext(ctx, "git", "-C", w.Cfg.Mirror, "merge-base", "--is-ancestor", sha, ref).Run() == nil
 }
 
 func applyPR(res *queue.Result, pr *provider.PR) {

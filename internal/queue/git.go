@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erikibolya/git-airlock/internal/proc"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -261,7 +261,7 @@ func (g *GitStore) Log(format string, args ...any) {
 func (g *GitStore) git(ctx context.Context, stdin string, args ...string) (string, error) {
 	runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(runCtx, "git", append([]string{"-C", g.repo}, args...)...)
+	cmd := proc.CommandContext(runCtx, "git", append([]string{"-C", g.repo}, args...)...)
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
 	}
