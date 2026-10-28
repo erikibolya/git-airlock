@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -48,6 +49,7 @@ func (a *App) checkUpdates(interactive bool) {
 	}
 	m, err := update.Fetch(context.Background(), manifestURL())
 	if err != nil {
+		log.Printf("update check: %v", err)
 		if interactive {
 			a.error("Update check failed", err.Error())
 		}
@@ -76,6 +78,7 @@ func (a *App) checkUpdates(interactive bool) {
 	if notes == "" {
 		notes = "See the release page for details."
 	}
+	log.Printf("update check: current=%s latest=%s", update.NormalizeVersion(version), update.NormalizeVersion(m.Version))
 	// Windows MessageBox only offers Yes/No; macOS/Linux use the labels.
 	choice, err := wailsruntime.MessageDialog(a.ctx, wailsruntime.MessageDialogOptions{
 		Type:          wailsruntime.QuestionDialog,
@@ -85,6 +88,7 @@ func (a *App) checkUpdates(interactive bool) {
 		DefaultButton: "Install now",
 		CancelButton:  "Later",
 	})
+	log.Printf("update dialog: choice=%q err=%v", choice, err)
 	if err != nil {
 		return
 	}
