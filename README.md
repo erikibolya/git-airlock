@@ -63,9 +63,10 @@ scoop bucket add git-airlock https://github.com/erikibolya/scoop-git-airlock
 scoop install git-airlock/git-airlock
 ```
 
-winget manifests for `ErikIbolya.GitAirlock` are generated from
-[`packaging/`](packaging) and submitted to
-[winget-pkgs](https://github.com/microsoft/winget-pkgs).
+The winget manifest for `ErikIbolya.GitAirlock` is in
+[microsoft/winget-pkgs#464029](https://github.com/microsoft/winget-pkgs/pull/464029);
+once merged, install it with `winget install ErikIbolya.GitAirlock`. The
+manifests are generated from [`packaging/`](packaging).
 
 Windows also has a one-click installer, `GitAirlockSetup-<version>.exe`. It
 installs the CLI, the desktop dashboard, a Start-menu and desktop shortcut, and

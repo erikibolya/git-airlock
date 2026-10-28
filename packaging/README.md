@@ -39,6 +39,9 @@ desktop app.
 
 ## winget
 
+The package is submitted in
+[microsoft/winget-pkgs#464029](https://github.com/microsoft/winget-pkgs/pull/464029).
+
 The three manifests in `packaging/out/winget/` follow the
 [winget-pkgs](https://github.com/microsoft/winget-pkgs) layout:
 
