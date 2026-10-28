@@ -34,6 +34,9 @@
 - **v1.0** — stability release: per-repository worker logs, multi-repository
   `airlock status`, cross-platform worker-task updates from the desktop picker,
   changelog and documentation. No breaking changes since 0.9.
+- **v1.1** — merge strategies (`merge`, `squash`, `rebase`) in the config, the
+  CLI and the dashboard, used by `auto_pr` too; the desktop tray menu shows the
+  latest worker result.
 
 ## Next
 
@@ -53,14 +56,14 @@ needs a local path/clone. Add a managed mirror cache so the whole flow can use
 
 ### Notifications
 
-The tray icon is in place, but it does not raise a toast yet. Add a Windows
-notification and a Linux `libnotify` message when a request finishes (merged,
-failed, checks pending).
+The tray menu and tooltip show the latest result. Native desktop toasts are not
+shipped yet; Windows needs a registered AppUserModelID/shortcut for unpackaged
+apps, which should be added together with the installer shortcut.
 
-### Merge strategies
+### Branch cleanup
 
-`--merge squash|rebase|merge` per request for GitHub/GitLab/Gitea, plus optional
-branch deletion after merge.
+Delete the remote branch after a merge (`delete_branch = true`), for providers
+that support it.
 
 ### Labels and review automation
 

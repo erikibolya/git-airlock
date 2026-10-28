@@ -120,13 +120,15 @@ func printUsage() {
 Usage:
   airlock init [--provider gitea|github] [--repo owner/name] [--remote company]
                [--api URL] [--ca PEM] [--base BRANCH] [--mirror PATH]
-               [--queue PATH] [--configure-git] [--force]
+               [--queue PATH] [--merge MODE] [--strategy METHOD]
+               [--configure-git] [--force]
   airlock sync [--config PATH]
   airlock pr open   [--head BRANCH] [--base BRANCH] [--title TEXT] [--body TEXT]
-                    [--merge never|when-green|now] [--dry-run]
-                    [--wait 2m|--no-wait] [--config PATH]
+                    [--merge never|when-green|now] [--strategy merge|squash|rebase]
+                    [--dry-run] [--wait 2m|--no-wait] [--config PATH]
   airlock pr status <number> [--wait 2m|--no-wait] [--config PATH]
-  airlock pr merge  <number> [--when-green] [--wait 2m|--no-wait] [--config PATH]
+  airlock pr merge  <number> [--when-green] [--strategy merge|squash|rebase]
+                    [--wait 2m|--no-wait] [--config PATH]
   airlock worker    [--config PATH]... [--no-sync] [--loop 1m]
   airlock status    [--config PATH]... [--watch] [--json]
   airlock ui        [--config PATH]... [--listen 127.0.0.1:8787]
@@ -201,6 +203,7 @@ func cmdInit(args []string) error {
 	mirrorFlag := fs.String("mirror", "", "bare mirror path")
 	queueFlag := fs.String("queue", "", "shared queue directory")
 	mergeFlag := fs.String("merge", "when-green", "default merge policy")
+	strategyFlag := fs.String("strategy", "merge", "merge method: merge, squash or rebase")
 	configure := fs.Bool("configure-git", false, "create the mirror and repoint git remotes")
 	force := fs.Bool("force", false, "overwrite an existing config")
 	if err := fs.Parse(args); err != nil {
@@ -243,15 +246,16 @@ func cmdInit(args []string) error {
 	}
 
 	cfg := &config.Config{
-		Repo:     repo,
-		Remote:   *remoteName,
-		Mirror:   *mirrorFlag,
-		Queue:    *queueFlag,
-		Provider: *providerName,
-		API:      *apiFlag,
-		CA:       *caFlag,
-		Base:     *baseFlag,
-		Merge:    *mergeFlag,
+		Repo:          repo,
+		Remote:        *remoteName,
+		Mirror:        *mirrorFlag,
+		Queue:         *queueFlag,
+		Provider:      *providerName,
+		API:           *apiFlag,
+		CA:            *caFlag,
+		Base:          *baseFlag,
+		Merge:         *mergeFlag,
+		MergeStrategy: *strategyFlag,
 	}
 	if err := cfg.Validate(); err != nil {
 		return err
@@ -375,6 +379,7 @@ func cmdPROpen(ctx context.Context, args []string) error {
 	titleFlag := fs.String("title", "", "PR title (default: last commit subject)")
 	bodyFlag := fs.String("body", "", "PR body")
 	mergeFlag := fs.String("merge", "", "never, when-green or now")
+	strategyFlag := fs.String("strategy", "", "merge method: merge, squash or rebase")
 	dryRun := fs.Bool("dry-run", false, "validate without creating anything")
 	wait := fs.Duration("wait", 2*time.Minute, "how long to wait for the worker")
 	noWait := fs.Bool("no-wait", false, "queue and exit immediately")
@@ -418,15 +423,21 @@ func cmdPROpen(ctx context.Context, args []string) error {
 	if merge == "" {
 		merge = cfg.Merge
 	}
+	if *strategyFlag != "" {
+		if _, ok := provider.NormalizeMergeStrategy(*strategyFlag); !ok {
+			return fmt.Errorf("--strategy must be merge, squash or rebase, got %q", *strategyFlag)
+		}
+	}
 	req := &queue.Request{
-		Action:  queue.ActionOpen,
-		Head:    head,
-		HeadSHA: headSHA,
-		Base:    base,
-		Title:   title,
-		Body:    *bodyFlag,
-		Merge:   merge,
-		DryRun:  *dryRun,
+		Action:   queue.ActionOpen,
+		Head:     head,
+		HeadSHA:  headSHA,
+		Base:     base,
+		Title:    title,
+		Body:     *bodyFlag,
+		Merge:    merge,
+		Strategy: *strategyFlag,
+		DryRun:   *dryRun,
 	}
 	return enqueueAndWait(ctx, cfg, req, *wait, *noWait)
 }
@@ -454,6 +465,7 @@ func cmdPRMerge(ctx context.Context, args []string) error {
 	fs.SetOutput(os.Stderr)
 	configPath := fs.String("config", "", "config path")
 	whenGreen := fs.Bool("when-green", false, "wait for green checks first")
+	strategyFlag := fs.String("strategy", "", "merge method: merge, squash or rebase")
 	wait := fs.Duration("wait", 2*time.Minute, "how long to wait for the worker")
 	noWait := fs.Bool("no-wait", false, "queue and exit immediately")
 	number, err := parseNumber(fs, args)
@@ -468,7 +480,12 @@ func cmdPRMerge(ctx context.Context, args []string) error {
 	if *whenGreen {
 		merge = "when-green"
 	}
-	req := &queue.Request{Action: queue.ActionMerge, Number: number, Merge: merge}
+	if *strategyFlag != "" {
+		if _, ok := provider.NormalizeMergeStrategy(*strategyFlag); !ok {
+			return fmt.Errorf("--strategy must be merge, squash or rebase, got %q", *strategyFlag)
+		}
+	}
+	req := &queue.Request{Action: queue.ActionMerge, Number: number, Merge: merge, Strategy: *strategyFlag}
 	return enqueueAndWait(ctx, cfg, req, *wait, *noWait)
 }
 

@@ -82,7 +82,7 @@ func TestFindCreateGetMerge(t *testing.T) {
 	if err != nil || !got.Mergeable || got.Merged {
 		t.Fatalf("get: %+v %v", got, err)
 	}
-	if err := p.Merge(context.Background(), 5); err != nil {
+	if err := p.Merge(context.Background(), 5, "merge"); err != nil {
 		t.Fatalf("merge: %v", err)
 	}
 }
@@ -110,5 +110,26 @@ func TestCreateConflict(t *testing.T) {
 	_, err := p.CreatePR(context.Background(), provider.CreateRequest{Head: "h", Base: "b", Title: "t"})
 	if !errors.Is(err, provider.ErrAlreadyExists) {
 		t.Fatalf("expected ErrAlreadyExists, got %v", err)
+	}
+}
+
+func TestMergeStrategyBody(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		got = body["Do"]
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	p := New(srv.URL+"/api/v1", "o/r", "token", srv.Client())
+	if err := p.Merge(context.Background(), 5, "squash"); err != nil {
+		t.Fatal(err)
+	}
+	if got != "squash" {
+		t.Fatalf("Do = %q, want squash", got)
+	}
+	if err := p.Merge(context.Background(), 5, "bogus"); err == nil {
+		t.Fatal("accepted an unknown strategy")
 	}
 }

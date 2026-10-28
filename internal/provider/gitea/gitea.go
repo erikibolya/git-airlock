@@ -125,9 +125,13 @@ func (p *Provider) Checks(ctx context.Context, pr *provider.PR) (provider.Checks
 	return evaluate(status), nil
 }
 
-func (p *Provider) Merge(ctx context.Context, number int) error {
+func (p *Provider) Merge(ctx context.Context, number int, strategy string) error {
+	method, ok := provider.NormalizeMergeStrategy(strategy)
+	if !ok {
+		return fmt.Errorf("unknown merge strategy %q", strategy)
+	}
 	return p.do(ctx, http.MethodPost, fmt.Sprintf("/repos/%s/pulls/%d/merge", p.repo, number),
-		map[string]any{"Do": "merge"}, nil)
+		map[string]any{"Do": method}, nil)
 }
 
 func (p *Provider) do(ctx context.Context, method, path string, in, out any) error {

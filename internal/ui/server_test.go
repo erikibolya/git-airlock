@@ -49,7 +49,7 @@ func TestDashboardAndEnqueue(t *testing.T) {
 		t.Fatalf("GET /manual = %d", rr.Code)
 	}
 
-	form := url.Values{"csrf": {s.csrf}, "head": {"feature"}, "base": {"main"}, "merge": {"when-green"}}
+	form := url.Values{"csrf": {s.csrf}, "head": {"feature"}, "base": {"main"}, "merge": {"when-green"}, "strategy": {"squash"}}
 	req := httptest.NewRequest(http.MethodPost, "/pr/open", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr = httptest.NewRecorder()
@@ -61,7 +61,7 @@ func TestDashboardAndEnqueue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(pending) != 1 || pending[0].Head != "feature" || pending[0].Merge != "when-green" {
+	if len(pending) != 1 || pending[0].Head != "feature" || pending[0].Merge != "when-green" || pending[0].Strategy != "squash" {
 		t.Fatalf("unexpected pending: %+v", pending)
 	}
 }
@@ -146,6 +146,15 @@ func TestDashboardListsRepos(t *testing.T) {
 	cfgB.Repo = "owner/two"
 	cfgB.Base = "master"
 
+	qA := queue.New(cfgA.Queue)
+	id, err := qA.Enqueue(&queue.Request{Action: queue.ActionStatus, Number: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := qA.WriteResult(&queue.Result{ID: id, Action: queue.ActionStatus, OK: true, Message: "manual-result-visible", PR: 3}); err != nil {
+		t.Fatal(err)
+	}
+
 	d, err := NewDashboard([]*config.Config{cfgA, cfgB}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -176,6 +185,9 @@ func TestDashboardListsRepos(t *testing.T) {
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/repo/owner-one/manual", nil))
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "/repo/owner-one/pr/open") {
-		t.Fatalf("manual page = %d", rr.Code)
+		t.Fatalf("manual page = %d (%s)", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "manual-result-visible") {
+		t.Fatalf("manual page does not render results: %s", rr.Body.String())
 	}
 }

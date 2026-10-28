@@ -16,16 +16,18 @@ import (
 )
 
 type fakeProvider struct {
-	pr          *provider.PR
-	checks      provider.Checks
-	createCalls int
-	mergeCalls  int
+	pr            *provider.PR
+	checks        provider.Checks
+	createCalls   int
+	mergeCalls    int
+	mergeStrategy string
 }
 
 func (f *fakeProvider) Name() string               { return "fake" }
 func (f *fakeProvider) Ping(context.Context) error { return nil }
-func (f *fakeProvider) Merge(context.Context, int) error {
+func (f *fakeProvider) Merge(_ context.Context, _ int, strategy string) error {
 	f.mergeCalls++
+	f.mergeStrategy = strategy
 	if f.pr != nil {
 		f.pr.Merged = true
 		f.pr.State = "closed"
@@ -347,7 +349,7 @@ func TestAutoOpenQueuesAheadBranches(t *testing.T) {
 	mirror := autoPRMirror(t)
 	cfg := &config.Config{
 		Repo: "o/r", Provider: "github", Mirror: mirror, Queue: t.TempDir(),
-		Base: "main", Merge: "when-green", AutoPR: true, AutoPRIgnore: []string{"wip/*"},
+		Base: "main", Merge: "when-green", MergeStrategy: "squash", AutoPR: true, AutoPRIgnore: []string{"wip/*"},
 	}
 	q := queue.New(cfg.Queue)
 	if err := q.Ensure(); err != nil {
@@ -373,7 +375,7 @@ func TestAutoOpenQueuesAheadBranches(t *testing.T) {
 		t.Fatalf("pending = %d, want 1", len(pending))
 	}
 	req := pending[0]
-	if req.Head != "feature" || req.Merge != "when-green" || req.HeadSHA == "" || req.Title != "feature work" {
+	if req.Head != "feature" || req.Merge != "when-green" || req.Strategy != "squash" || req.HeadSHA == "" || req.Title != "feature work" {
 		t.Fatalf("unexpected request: %+v", req)
 	}
 
@@ -405,5 +407,56 @@ func TestAutoOpenSkipsOpenPR(t *testing.T) {
 	}
 	if n != 0 {
 		t.Fatalf("queued %d, want 0 when an open PR exists", n)
+	}
+}
+
+func TestMergeStrategy(t *testing.T) {
+	ctx := context.Background()
+	f := &fakeProvider{checks: provider.ChecksSuccess}
+	w, q := newWorker(t, f)
+	w.Cfg.MergeStrategy = "squash"
+	if _, err := q.Enqueue(&queue.Request{Action: queue.ActionOpen, Head: "feature", Base: "main", Merge: "when-green"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if f.mergeStrategy != "squash" {
+		t.Fatalf("strategy = %q, want squash", f.mergeStrategy)
+	}
+
+	f = &fakeProvider{checks: provider.ChecksSuccess}
+	w, q = newWorker(t, f)
+	w.Cfg.MergeStrategy = "squash"
+	if _, err := q.Enqueue(&queue.Request{Action: queue.ActionOpen, Head: "feature", Base: "main", Merge: "when-green", Strategy: "rebase"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if f.mergeStrategy != "rebase" {
+		t.Fatalf("request strategy = %q, want rebase", f.mergeStrategy)
+	}
+}
+
+func TestUnknownMergeStrategy(t *testing.T) {
+	f := &fakeProvider{checks: provider.ChecksSuccess}
+	w, q := newWorker(t, f)
+	id, err := q.Enqueue(&queue.Request{Action: queue.ActionOpen, Head: "feature", Base: "main", Merge: "when-green", Strategy: "fast-forward"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	res, err := q.ReadResult(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OK || !strings.Contains(res.Message, "unknown merge strategy") {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+	if f.mergeCalls != 0 {
+		t.Fatal("merged with an invalid strategy")
 	}
 }

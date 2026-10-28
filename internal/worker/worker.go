@@ -128,13 +128,14 @@ func (w *Worker) AutoOpen(ctx context.Context) (int, error) {
 			continue
 		}
 		req := &queue.Request{
-			Action:  queue.ActionOpen,
-			Head:    br.Name,
-			HeadSHA: br.SHA,
-			Base:    w.Cfg.Base,
-			Merge:   merge,
-			Title:   br.Subject,
-			Body:    "Opened automatically by Git Airlock.",
+			Action:   queue.ActionOpen,
+			Head:     br.Name,
+			HeadSHA:  br.SHA,
+			Base:     w.Cfg.Base,
+			Merge:    merge,
+			Title:    br.Subject,
+			Body:     "Opened automatically by Git Airlock.",
+			Strategy: w.Cfg.MergeStrategy,
 		}
 		id, err := w.Q.Enqueue(req)
 		if err != nil {
@@ -188,19 +189,28 @@ func (w *Worker) handle(ctx context.Context, req queue.Request) queue.Result {
 	if req.Action == queue.ActionMerge && req.Merge == "" {
 		merge = "now"
 	}
+	strategy := req.Strategy
+	if strategy == "" {
+		strategy = w.Cfg.MergeStrategy
+	}
+	strategy, ok := provider.NormalizeMergeStrategy(strategy)
+	if !ok {
+		res.Message = fmt.Sprintf("%s: unknown merge strategy %q", req.Action, req.Strategy)
+		return res
+	}
 
 	switch req.Action {
 	case queue.ActionOpen:
-		w.handleOpen(ctx, &res, head, base, req, merge)
+		w.handleOpen(ctx, &res, head, base, req, merge, strategy)
 	case queue.ActionStatus:
 		w.handleStatus(ctx, &res, req.Number)
 	case queue.ActionMerge:
-		w.handleMerge(ctx, &res, req.Number, merge)
+		w.handleMerge(ctx, &res, req.Number, merge, strategy)
 	}
 	return res
 }
 
-func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base string, req queue.Request, merge string) {
+func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base string, req queue.Request, merge, strategy string) {
 	if head == "" {
 		fail(res, errors.New("open: head branch is empty"))
 		return
@@ -312,7 +322,7 @@ func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base s
 			return
 		}
 	}
-	w.merge(ctx, res, pr.Number)
+	w.merge(ctx, res, pr.Number, strategy)
 }
 
 func (w *Worker) handleStatus(ctx context.Context, res *queue.Result, number int) {
@@ -328,7 +338,7 @@ func (w *Worker) handleStatus(ctx context.Context, res *queue.Result, number int
 	res.Message = fmt.Sprintf("PR #%d state=%s merged=%v checks=%s", number, res.State, res.Merged, checksLabel(res.Checks))
 }
 
-func (w *Worker) handleMerge(ctx context.Context, res *queue.Result, number int, merge string) {
+func (w *Worker) handleMerge(ctx context.Context, res *queue.Result, number int, merge, strategy string) {
 	if number <= 0 {
 		fail(res, errors.New("merge: PR number is required"))
 		return
@@ -361,11 +371,11 @@ func (w *Worker) handleMerge(ctx context.Context, res *queue.Result, number int,
 			return
 		}
 	}
-	w.merge(ctx, res, number)
+	w.merge(ctx, res, number, strategy)
 }
 
-func (w *Worker) merge(ctx context.Context, res *queue.Result, number int) {
-	if err := w.P.Merge(ctx, number); err != nil {
+func (w *Worker) merge(ctx context.Context, res *queue.Result, number int, strategy string) {
+	if err := w.P.Merge(ctx, number, strategy); err != nil {
 		// A concurrent merge may have won the race; re-read before failing.
 		if pr, getErr := w.P.GetPR(ctx, number); getErr == nil && pr.Merged {
 			applyPR(res, pr)

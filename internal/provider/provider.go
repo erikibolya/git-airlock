@@ -36,6 +36,26 @@ const (
 	ChecksNone    Checks = "none"
 )
 
+// MergeStrategy selects how the provider combines the PR branch.
+const (
+	MergeStrategyMerge  = "merge"
+	MergeStrategySquash = "squash"
+	MergeStrategyRebase = "rebase"
+)
+
+// NormalizeMergeStrategy returns the default for an empty value and reports
+// whether the strategy is known.
+func NormalizeMergeStrategy(s string) (string, bool) {
+	switch s {
+	case "":
+		return MergeStrategyMerge, true
+	case MergeStrategyMerge, MergeStrategySquash, MergeStrategyRebase:
+		return s, true
+	default:
+		return s, false
+	}
+}
+
 // CreateRequest describes a new pull request.
 type CreateRequest struct {
 	Head  string
@@ -55,7 +75,7 @@ type Provider interface {
 	CreatePR(ctx context.Context, req CreateRequest) (*PR, error)
 	GetPR(ctx context.Context, number int) (*PR, error)
 	Checks(ctx context.Context, pr *PR) (Checks, error)
-	Merge(ctx context.Context, number int) error
+	Merge(ctx context.Context, number int, strategy string) error
 }
 
 // ErrAlreadyExists means an open PR already exists for the branch pair.

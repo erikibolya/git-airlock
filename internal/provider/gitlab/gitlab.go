@@ -149,8 +149,19 @@ func (p *Provider) Checks(ctx context.Context, pr *provider.PR) (provider.Checks
 	return evaluate(pipelines[0].Status), nil
 }
 
-func (p *Provider) Merge(ctx context.Context, number int) error {
-	return p.do(ctx, http.MethodPut, fmt.Sprintf("%s/%d/merge", p.mrPath(), number), map[string]any{}, nil)
+func (p *Provider) Merge(ctx context.Context, number int, strategy string) error {
+	method, ok := provider.NormalizeMergeStrategy(strategy)
+	if !ok {
+		return fmt.Errorf("unknown merge strategy %q", strategy)
+	}
+	if method == provider.MergeStrategyRebase {
+		return fmt.Errorf("the gitlab provider does not support rebase merges; use squash or merge")
+	}
+	body := map[string]any{}
+	if method == provider.MergeStrategySquash {
+		body["squash"] = true
+	}
+	return p.do(ctx, http.MethodPut, fmt.Sprintf("%s/%d/merge", p.mrPath(), number), body, nil)
 }
 
 func (p *Provider) mrPath() string {

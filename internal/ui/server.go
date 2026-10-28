@@ -19,6 +19,7 @@ import (
 	"github.com/erikibolya/git-airlock/internal/config"
 	"github.com/erikibolya/git-airlock/internal/gitutil"
 	"github.com/erikibolya/git-airlock/internal/proc"
+	"github.com/erikibolya/git-airlock/internal/provider"
 	"github.com/erikibolya/git-airlock/internal/queue"
 )
 
@@ -332,8 +333,10 @@ func (s *Server) summary() (repoSummary, error) {
 // handleManual renders the explicit request forms. Most work is handled by
 // auto_pr, so this is an exception page.
 func (s *Server) handleManual(w http.ResponseWriter, r *http.Request) {
+	pending, _ := s.store.Pending()
 	results, _ := s.store.ListResults(10)
 	data := s.baseData("Manual")
+	data.Pending = pending
 	data.Results = results
 	data.Flash = r.URL.Query().Get("flash")
 	s.render(w, "manual", data)
@@ -437,19 +440,28 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 	if merge != "never" && merge != "when-green" && merge != "now" {
 		merge = s.cfg.Merge
 	}
+	strategy := r.FormValue("strategy")
+	if strategy == "" {
+		strategy = s.cfg.MergeStrategy
+	}
+	if _, ok := provider.NormalizeMergeStrategy(strategy); !ok {
+		s.flash(w, r, fmt.Sprintf("unknown merge strategy %q", strategy))
+		return
+	}
 	headSHA := ""
 	if out, err := proc.Command("git", "-C", s.cfg.Mirror, "rev-parse", "refs/heads/"+head).Output(); err == nil {
 		headSHA = strings.TrimSpace(string(out))
 	}
 	req := &queue.Request{
-		Action:  queue.ActionOpen,
-		Head:    head,
-		HeadSHA: headSHA,
-		Base:    base,
-		Title:   strings.TrimSpace(r.FormValue("title")),
-		Body:    strings.TrimSpace(r.FormValue("body")),
-		Merge:   merge,
-		DryRun:  r.FormValue("dry_run") != "",
+		Action:   queue.ActionOpen,
+		Head:     head,
+		HeadSHA:  headSHA,
+		Base:     base,
+		Title:    strings.TrimSpace(r.FormValue("title")),
+		Body:     strings.TrimSpace(r.FormValue("body")),
+		Merge:    merge,
+		Strategy: strategy,
+		DryRun:   r.FormValue("dry_run") != "",
 	}
 	id, err := s.store.Enqueue(req)
 	if err != nil {
@@ -497,7 +509,15 @@ func (s *Server) handleMerge(w http.ResponseWriter, r *http.Request) {
 	if r.FormValue("when_green") != "" {
 		merge = "when-green"
 	}
-	id, err := s.store.Enqueue(&queue.Request{Action: queue.ActionMerge, Number: number, Merge: merge})
+	strategy := r.FormValue("strategy")
+	if strategy == "" {
+		strategy = s.cfg.MergeStrategy
+	}
+	if _, ok := provider.NormalizeMergeStrategy(strategy); !ok {
+		s.flash(w, r, fmt.Sprintf("unknown merge strategy %q", strategy))
+		return
+	}
+	id, err := s.store.Enqueue(&queue.Request{Action: queue.ActionMerge, Number: number, Merge: merge, Strategy: strategy})
 	if err != nil {
 		s.flash(w, r, "queue: "+err.Error())
 		return
