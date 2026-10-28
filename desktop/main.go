@@ -24,6 +24,7 @@ import (
 	"github.com/erikibolya/git-airlock/internal/config"
 	"github.com/erikibolya/git-airlock/internal/gitutil"
 	"github.com/erikibolya/git-airlock/internal/install"
+	"github.com/erikibolya/git-airlock/internal/reposync"
 	"github.com/erikibolya/git-airlock/internal/ui"
 )
 
@@ -511,7 +512,7 @@ func (a *App) syncNow() {
 	systray.SetTooltip("Git Airlock: syncing…")
 	var parts []string
 	for _, cfg := range box.cfgs {
-		report, err := gitutil.Sync(context.Background(), cfg.Mirror, cfg.Remote)
+		report, err := reposync.Sync(context.Background(), cfg)
 		parts = append(parts, cfg.Repo+": "+syncMessage(report, err))
 	}
 	msg := join(parts)

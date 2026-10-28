@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0 — 2026-10-28
+
+- Sync over SSH: `mirror_remote` and `remote_url` let a worker with no shared
+  mount keep a local cache, fetch both the isolated mirror and the private
+  remote, and fast-forward them without force-pushes. `queue_remote` already
+  carries the queue refs over SSH.
+- The Docker integration test now uses a real Gitea Actions `act_runner` (host
+  mode) and the workflow's `(pull_request)` commit status instead of a simulated
+  status.
+
 ## 1.4.0 — 2026-10-28
 
 - Native notifications when a request is merged or fails: Windows toast (the

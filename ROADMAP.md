@@ -45,14 +45,10 @@
   with an AppUserModelID, Linux `notify-send`, macOS Notification Center) and a
   Docker/Gitea integration test covering the full queue → sync → PR → checks →
   squash merge → branch cleanup path.
+- **v1.5** — sync over SSH with a managed mirror cache (`mirror_remote`,
+  `remote_url`) and a real `act_runner` in the Docker integration test.
 
 ## Next
-
-### Sync over SSH
-
-The queue can already travel over SSH; the commit mirror used by `sync` still
-needs a local path/clone. Add a managed mirror cache so the whole flow can use
-`ssh://` for both commits and queue refs.
 
 ### Notifications
 
@@ -71,8 +67,7 @@ The Windows installer covers the direct-download case (CLI, desktop app,
 autostart, worker task). Homebrew, Scoop/winget and Linux packages are still
 missing.
 
-### Gitea Actions integration
+### Gitea Actions coverage
 
-The Docker test simulates CI with commit statuses. Adding a real `act_runner`
-would also exercise the workflow runner and Gitea Actions-specific status
-contexts.
+The integration test now runs a real `act_runner` in host mode. Extending it with
+a Docker-in-Docker runner would cover container jobs as well.

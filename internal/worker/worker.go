@@ -18,6 +18,7 @@ import (
 	"github.com/erikibolya/git-airlock/internal/proc"
 	"github.com/erikibolya/git-airlock/internal/provider"
 	"github.com/erikibolya/git-airlock/internal/queue"
+	"github.com/erikibolya/git-airlock/internal/reposync"
 )
 
 // Worker processes the shared queue.
@@ -335,7 +336,7 @@ func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base s
 }
 
 func (w *Worker) handleSync(ctx context.Context, res *queue.Result) {
-	report, err := gitutil.Sync(ctx, w.Cfg.Mirror, w.Cfg.Remote)
+	report, err := reposync.Sync(ctx, w.Cfg)
 	var parts []string
 	if len(report.Pushed) > 0 {
 		parts = append(parts, "pushed "+strings.Join(report.Pushed, ", "))

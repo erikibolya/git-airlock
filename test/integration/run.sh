@@ -5,9 +5,9 @@ cd "$(dirname "$0")"
 COMPOSE="docker compose -f docker-compose.yml"
 URL="http://127.0.0.1:3000"
 
-rm -rf work
-mkdir -p work
 $COMPOSE down -v --remove-orphans >/dev/null 2>&1 || true
+rm -rf workspace
+mkdir -p workspace
 cleanup() { $COMPOSE down -v --remove-orphans >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
@@ -34,5 +34,23 @@ fi
 curl -fsS -H "Authorization: token ${TOKEN}" -H "Content-Type: application/json" \
   -d '{"name":"repo","auto_init":true,"default_branch":"main","private":false}' \
   "${URL}/api/v1/user/repos" >/dev/null
+
+# Start the real Gitea Actions runner. Host mode keeps the test self-contained.
+RUNNER_TOKEN=$(curl -fsS -H "Authorization: token ${TOKEN}" \
+  "${URL}/api/v1/admin/runners/registration-token" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+if [ -z "${RUNNER_TOKEN}" ]; then
+  echo "could not create a runner registration token" >&2
+  exit 1
+fi
+RUNNER_TOKEN="${RUNNER_TOKEN}" $COMPOSE up -d runner
+for _ in $(seq 1 30); do
+  $COMPOSE logs runner 2>&1 | grep -qi "registered" && break
+  sleep 1
+done
+if ! $COMPOSE logs runner 2>&1 | grep -qi "registered"; then
+  echo "act_runner did not register:" >&2
+  $COMPOSE logs runner 2>&1 | tail -20 >&2
+  exit 1
+fi
 
 $COMPOSE run --rm -T -e TOKEN="${TOKEN}" tool bash /run/airlock/test.sh

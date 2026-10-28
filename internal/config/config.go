@@ -17,7 +17,12 @@ type Config struct {
 	// Remote is the name of the private git remote (VPN only), e.g. "company".
 	Remote string `toml:"remote"`
 	// Mirror is the bare repository used as the local push target and sync hub.
+	// With MirrorRemote it is a local cache instead.
 	Mirror string `toml:"mirror"`
+	// MirrorRemote is an optional SSH URL of the isolated machine's bare mirror.
+	MirrorRemote string `toml:"mirror_remote"`
+	// RemoteURL is the optional private remote URL used with MirrorRemote.
+	RemoteURL string `toml:"remote_url"`
 	// Queue is the shared directory with requests/, results/, processed/.
 	Queue string `toml:"queue"`
 	// QueueRemote optionally carries refs/airlock/* over git (e.g. ssh://)
@@ -199,6 +204,11 @@ remote = %q
 
 # Bare mirror used as the push target for the isolated machine.
 mirror = %q
+
+# Optional SSH-only setup: mirror is a local cache, mirror_remote is the
+# isolated machine's bare mirror, and remote_url is the private remote URL.
+# mirror_remote = "ssh://user@host/path/to/repo.git"
+# remote_url = "https://gitea.example.com/owner/name.git"
 
 # Shared directory for requests/results, or "git" for refs/airlock/*.
 queue = %q

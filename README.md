@@ -290,6 +290,8 @@ ca       = ""                        # optional PEM bundle
 base     = "main"                    # default PR target
 merge    = "when-green"              # never | when-green | now
 merge_strategy = "merge"             # merge | squash | rebase
+# mirror_remote = "ssh://user@host/path/repo.git"  # SSH-only worker
+# remote_url    = "https://gitea.example.com/owner/name.git"
 delete_branch = false                # delete the source branch after merge
 auto_pr  = false                     # open PRs for branches ahead of base
 auto_pr_ignore = ["wip/*"]           # optional branch globs to skip
@@ -335,6 +337,26 @@ you do not want another writable queue directory on the isolated machine.
 
 That means the agent can push freely, and a human can still push from the
 workstation; neither side silently destroys the other.
+
+### Sync over SSH
+
+When the workstation cannot mount the mirror at all, keep a local cache instead.
+The isolated config stays unchanged; the worker config adds:
+
+```toml
+mirror = "~/.cache/git-airlock/mirrors/Project.git"   # cache, created on first sync
+mirror_remote = "ssh://user@host/path/to/repos/.mirrors/Project.git"
+queue = "git"
+queue_remote = "ssh://user@host/path/to/repos/.mirrors/Project.git"
+remote_url = "https://gitea.example.com/acme/Project.git"
+```
+
+The worker fetches both the SSH mirror and the private remote into the cache,
+fast-forwards it, and pushes only fast-forwards back. Diverged branches are
+reported and never force-pushed. `queue_remote` already carries the queue refs
+over SSH, so no shared mount is needed at all. Keep credentials in an SSH key or
+a git credential helper; avoid putting tokens in `remote_url`. If the cache
+already has the private remote configured, `remote_url` can be omitted.
 
 ## How merging works
 
@@ -452,9 +474,10 @@ go build ./...
 The tests cover both queue transports, fast-forward sync (including divergence),
 all three provider adapters, and the worker's pending/merge state machine.
 
-The end-to-end test in [`test/integration`](test/integration) starts Gitea in
-Docker, pushes from the isolated side, runs the real worker, simulates CI with a
-commit status and checks the squash merge plus branch cleanup:
+The end-to-end test in [`test/integration`](test/integration) starts Gitea and a
+real `act_runner` in Docker, pushes from the isolated side, runs the real
+worker, waits for the workflow's commit status and checks the squash merge plus
+branch cleanup:
 
 ```bash
 bash test/integration/run.sh
