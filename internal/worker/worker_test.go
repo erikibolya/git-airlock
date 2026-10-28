@@ -3,6 +3,8 @@ package worker
 import (
 	"context"
 	"errors"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/erikibolya/git-airlock/internal/config"
@@ -61,7 +63,11 @@ func newWorker(t *testing.T, f *fakeProvider) (*Worker, *queue.Queue) {
 	if err := q.Ensure(); err != nil {
 		t.Fatal(err)
 	}
-	return New(cfg, f), q
+	w, err := New(cfg, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return w, q
 }
 
 func TestOpenWaitsForChecksThenMerges(t *testing.T) {
@@ -140,6 +146,51 @@ func TestMergeWhenGreenPending(t *testing.T) {
 	res, _ = q.ReadResult(id)
 	if !res.OK || !res.Merged || f.mergeCalls != 1 {
 		t.Fatalf("result=%+v merge=%d", res, f.mergeCalls)
+	}
+}
+
+func TestGitQueueWorker(t *testing.T) {
+	mirror := filepath.Join(t.TempDir(), "mirror.git")
+	if out, err := exec.Command("git", "init", "--bare", mirror).CombinedOutput(); err != nil {
+		t.Fatalf("git init --bare: %v\n%s", err, out)
+	}
+	cfg := &config.Config{
+		Repo: "o/r", Provider: "github", Mirror: mirror,
+		Queue: "git", Base: "main", Merge: "when-green",
+	}
+	f := &fakeProvider{checks: provider.ChecksPending}
+	w, err := New(cfg, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := queue.NewGit(mirror)
+	id, err := q.Enqueue(&queue.Request{Action: queue.ActionOpen, Head: "feature", Base: "main", Merge: "when-green"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	res, err := q.ReadResult(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Pending || f.mergeCalls != 0 {
+		t.Fatalf("first run: %+v merge=%d", res, f.mergeCalls)
+	}
+	f.checks = provider.ChecksSuccess
+	if _, err := w.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	res, err = q.ReadResult(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.OK || !res.Merged || f.mergeCalls != 1 {
+		t.Fatalf("second run: %+v merge=%d", res, f.mergeCalls)
+	}
+	if pending, _ := q.Pending(); len(pending) != 0 {
+		t.Fatalf("request not deleted: %+v", pending)
 	}
 }
 

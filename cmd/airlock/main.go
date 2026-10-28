@@ -24,6 +24,7 @@ import (
 	"github.com/erikibolya/git-airlock/internal/provider"
 	"github.com/erikibolya/git-airlock/internal/provider/gitea"
 	"github.com/erikibolya/git-airlock/internal/provider/github"
+	"github.com/erikibolya/git-airlock/internal/provider/gitlab"
 	"github.com/erikibolya/git-airlock/internal/queue"
 	"github.com/erikibolya/git-airlock/internal/worker"
 )
@@ -158,6 +159,8 @@ func newProvider(cfg *config.Config) (provider.Provider, error) {
 		return gitea.New(cfg.API, cfg.Repo, token, client), nil
 	case "github":
 		return github.New(cfg.API, cfg.Repo, token, client), nil
+	case "gitlab":
+		return gitlab.New(cfg.API, cfg.Repo, token, client), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", cfg.Provider)
 	}
@@ -168,10 +171,10 @@ func newProvider(cfg *config.Config) (provider.Provider, error) {
 func cmdInit(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	providerName := fs.String("provider", "gitea", "gitea or github")
+	providerName := fs.String("provider", "gitea", "gitea, github or gitlab")
 	repoFlag := fs.String("repo", "", "owner/name")
 	remoteName := fs.String("remote", "company", "name for the private remote")
-	apiFlag := fs.String("api", "", "provider API base (Gitea)")
+	apiFlag := fs.String("api", "", "provider API base (Gitea/GitLab)")
 	caFlag := fs.String("ca", "", "PEM CA bundle")
 	baseFlag := fs.String("base", "", "default PR target branch")
 	mirrorFlag := fs.String("mirror", "", "bare mirror path")
@@ -469,13 +472,16 @@ func parseNumber(fs *flag.FlagSet, args []string) (int, error) {
 }
 
 func enqueueAndWait(ctx context.Context, cfg *config.Config, req *queue.Request, wait time.Duration, noWait bool) error {
-	q := queue.New(cfg.Queue)
+	q, err := queue.Open(cfg.Queue, cfg.Mirror)
+	if err != nil {
+		return err
+	}
 	id, err := q.Enqueue(req)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("queued %s (%s)\n", id, req.Action)
-	fmt.Printf("result: %s\n", filepath.Join(q.ResultsDir(), id+".json"))
+	fmt.Printf("result: %s\n", q.Location(id))
 	if noWait || wait <= 0 {
 		return &exitError{code: 3, msg: "queued; the worker will process it"}
 	}
@@ -483,7 +489,7 @@ func enqueueAndWait(ctx context.Context, cfg *config.Config, req *queue.Request,
 	defer cancel()
 	res, err := q.Wait(waitCtx, id, 5*time.Second, printResult)
 	if err != nil {
-		return &exitError{code: 3, msg: fmt.Sprintf("still queued after %s; check %s later", wait, filepath.Join(q.ResultsDir(), id+".json"))}
+		return &exitError{code: 3, msg: fmt.Sprintf("still queued after %s; check %s later", wait, q.Location(id))}
 	}
 	if res.OK {
 		return nil
@@ -515,20 +521,22 @@ func cmdWorker(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	q := queue.New(cfg.Queue)
-	w := worker.New(cfg, p)
+	w, err := worker.New(cfg, p)
+	if err != nil {
+		return err
+	}
 	for {
 		if !*noSync {
 			report, err := gitutil.Sync(ctx, cfg.Mirror, cfg.Remote)
 			printSyncReport(report)
 			if err != nil {
-				q.Log("sync failed: %v", err)
+				w.Q.Log("sync failed: %v", err)
 				fmt.Fprintln(os.Stderr, "sync:", err)
 			}
 		}
 		n, err := w.Run(ctx)
 		if err != nil {
-			q.Log("worker failed: %v", err)
+			w.Q.Log("worker failed: %v", err)
 			fmt.Fprintln(os.Stderr, "worker:", err)
 		} else if n > 0 {
 			fmt.Printf("processed %d request(s) from %s\n", n, path)
@@ -604,18 +612,12 @@ func cmdDoctor(ctx context.Context, args []string) error {
 	} else {
 		check("API auth", func() error { return p.Ping(ctx) })
 	}
-	check("queue writable", func() error {
-		q := queue.New(cfg.Queue)
-		if err := q.Ensure(); err != nil {
-			return err
-		}
-		f, err := os.CreateTemp(q.TmpDir(), "doctor-")
+	check("queue", func() error {
+		q, err := queue.Open(cfg.Queue, cfg.Mirror)
 		if err != nil {
 			return err
 		}
-		name := f.Name()
-		f.Close()
-		return os.Remove(name)
+		return q.Ensure()
 	})
 	check("scheduler", func() error {
 		status, err := install.Status("Git Airlock")

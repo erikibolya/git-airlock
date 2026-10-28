@@ -22,12 +22,16 @@ import (
 type Worker struct {
 	Cfg *config.Config
 	P   provider.Provider
-	Q   *queue.Queue
+	Q   queue.Store
 }
 
 // New builds a worker for one repository config.
-func New(cfg *config.Config, p provider.Provider) *Worker {
-	return &Worker{Cfg: cfg, P: p, Q: queue.New(cfg.Queue)}
+func New(cfg *config.Config, p provider.Provider) (*Worker, error) {
+	q, err := queue.Open(cfg.Queue, cfg.Mirror)
+	if err != nil {
+		return nil, err
+	}
+	return &Worker{Cfg: cfg, P: p, Q: q}, nil
 }
 
 // Run processes all pending requests once and returns how many were handled.

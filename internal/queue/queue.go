@@ -52,7 +52,36 @@ type Result struct {
 	Checks    string `json:"checks,omitempty"`
 }
 
-// Queue is rooted at the shared automation directory.
+// Store is the transport used by the CLI and the worker. The default is a
+// shared directory; "git" stores requests/results as refs in the bare mirror.
+type Store interface {
+	Ensure() error
+	Enqueue(*Request) (string, error)
+	Pending() ([]Request, error)
+	WriteResult(*Result) error
+	ReadResult(string) (*Result, error)
+	MarkProcessed(string) error
+	Wait(ctx context.Context, id string, interval time.Duration, onChange func(*Result)) (*Result, error)
+	Log(format string, args ...any)
+	Location(id string) string
+}
+
+// Open selects the queue transport. A queue value of "git" uses
+// refs/airlock/* in the mirror; anything else is a shared directory.
+func Open(queueCfg, mirror string) (Store, error) {
+	if queueCfg == "git" {
+		if mirror == "" {
+			return nil, errors.New("queue=git requires mirror")
+		}
+		return NewGit(mirror), nil
+	}
+	if queueCfg == "" {
+		return nil, errors.New("queue is empty")
+	}
+	return New(queueCfg), nil
+}
+
+// Queue is a directory-backed store.
 type Queue struct {
 	Dir string
 }
@@ -60,6 +89,11 @@ type Queue struct {
 // New returns a queue rooted at dir.
 func New(dir string) *Queue {
 	return &Queue{Dir: dir}
+}
+
+// Location is the result file path.
+func (q *Queue) Location(id string) string {
+	return filepath.Join(q.ResultsDir(), id+".json")
 }
 
 func (q *Queue) RequestsDir() string  { return filepath.Join(q.Dir, "requests") }

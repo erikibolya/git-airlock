@@ -20,7 +20,7 @@ type Config struct {
 	Mirror string `toml:"mirror"`
 	// Queue is the shared directory with requests/, results/, processed/.
 	Queue string `toml:"queue"`
-	// Provider is "gitea" or "github".
+	// Provider is "gitea", "github" or "gitlab".
 	Provider string `toml:"provider"`
 	// API is the provider REST base URL (required for Gitea).
 	API string `toml:"api"`
@@ -120,9 +120,9 @@ func (c *Config) Validate() error {
 		if c.API == "" {
 			return errors.New("api is required for provider gitea")
 		}
-	case "github":
+	case "github", "gitlab":
 	default:
-		return fmt.Errorf("provider must be gitea or github, got %q", c.Provider)
+		return fmt.Errorf("provider must be gitea, github or gitlab, got %q", c.Provider)
 	}
 	if c.Mirror == "" {
 		return errors.New("mirror is required")
@@ -184,7 +184,7 @@ mirror = %q
 # Shared directory for requests/results between isolated host and worker.
 queue = %q
 
-# gitea or github.
+# gitea, github or gitlab.
 provider = %q
 
 # REST API base (Gitea only; GitHub defaults to https://api.github.com).

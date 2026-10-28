@@ -41,6 +41,10 @@ Requires Go 1.22+.
 go install github.com/erikibolya/git-airlock/cmd/airlock@latest
 ```
 
+Prebuilt archives for Linux (amd64/arm64), macOS (amd64/arm64) and Windows
+(amd64) are on the [Releases](https://github.com/erikibolya/git-airlock/releases)
+page.
+
 Or build from source:
 
 ```bash
@@ -65,6 +69,8 @@ airlock init \
   --configure-git
 ```
 
+Use `--provider github` or `--provider gitlab` for other hosts.
+
 `--configure-git` does three things:
 
 1. creates a bare mirror (default `~/.airlock/<owner>-<name>.git`);
@@ -83,7 +89,8 @@ airlock pr open               # queued; the workstation creates and merges it
 Set a token and run the worker once:
 
 ```bash
-export GITEA_TOKEN=...        # or AIRLOCK_TOKEN; GitHub can use `gh auth token`
+export GITEA_TOKEN=...        # GITLAB_TOKEN / GITHUB_TOKEN, or AIRLOCK_TOKEN
+                              # GitHub can also use `gh auth token`
 airlock worker --config /path/to/repo/.airlock.toml
 airlock doctor --config /path/to/repo/.airlock.toml
 ```
@@ -129,8 +136,8 @@ keeps retrying; check the result file later instead of resubmitting).
 repo     = "owner/name"
 remote   = "company"                 # private remote name
 mirror   = "~/.airlock/owner-name.git"
-queue    = "~/.airlock/queue"
-provider = "gitea"                   # gitea | github
+queue    = "~/.airlock/queue"        # shared dir, or "git" for refs/airlock/*
+provider = "gitea"                   # gitea | github | gitlab
 api      = "https://gitea.example.com/api/v1"
 ca       = ""                        # optional PEM bundle
 base     = "main"                    # default PR target
@@ -150,6 +157,18 @@ Resolved in this order, never printed:
 4. userinfo embedded in the private remote URL (Gitea convenience)
 
 For a private CA, set `ca` to a PEM bundle.
+
+### Queue transports
+
+- `queue = "/path"` — a shared directory with `requests/`, `results/` and
+  `processed/`. Simple and inspectable; both machines must mount it.
+- `queue = "git"` — requests and results are blobs referenced from
+  `refs/airlock/requests/*` and `refs/airlock/results/*` in the bare mirror.
+  No second shared folder is needed; the queue lives in the mirror.
+  Both sides still need access to the mirror (direct path or the same mount).
+
+The git-ref transport is the right choice when the mirror is already shared but
+you do not want another writable queue directory on the isolated machine.
 
 ## How the sync works
 
@@ -177,6 +196,8 @@ cancelled by newer pushes and Gitea reports those as failures, so including them
 would block every merge.
 
 For GitHub, the worker combines check runs and commit statuses.
+
+For GitLab, the latest pipeline for the PR head SHA gates the merge.
 
 If a repository has no CI at all the request stays pending forever by design;
 use `--merge never` or `--merge now` explicitly.
@@ -214,11 +235,15 @@ system.
 ## Limitations / roadmap
 
 - One config per repository. Use one scheduler entry per repo.
-- The queue is a shared filesystem; both machines must see the same directory.
-  A future version can carry the queue over `refs/airlock/*` instead.
+- The queue is either a shared directory or `refs/airlock/*` in the mirror.
+  Both sides need access to the mirror; a mirror reachable only over SSH needs a
+  fetch/push mode for the queue refs (roadmap).
 - The worker polls; it is not an event-driven service.
-- Gitea and GitHub are supported today; GitLab is a natural next adapter.
-- No PR review automation, labels, or release automation.
+- Gitea, GitHub and GitLab are supported today.
+- No PR review automation, labels, or release automation (beyond GitHub
+  releases of Airlock itself).
+- A small local web dashboard is planned; the CLI and the queue remain the
+  source of truth.
 
 ## Development
 
@@ -228,8 +253,8 @@ go test ./...
 go build ./cmd/airlock
 ```
 
-The tests cover the queue, fast-forward sync (including divergence), both
-provider adapters, and the worker's pending/merge state machine.
+The tests cover both queue transports, fast-forward sync (including divergence),
+all three provider adapters, and the worker's pending/merge state machine.
 
 ## License
 

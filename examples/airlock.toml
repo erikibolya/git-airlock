@@ -2,13 +2,20 @@
 repo     = "owner/name"
 remote   = "company"
 mirror   = "~/.airlock/owner-name.git"
+
+# Shared directory, or "git" to keep the queue in refs/airlock/* of the mirror.
 queue    = "~/.airlock/queue"
-provider = "gitea"
+
+provider = "gitea"                   # gitea | github | gitlab
 api      = "https://gitea.example.com/api/v1"
 ca       = ""
 base     = "main"
 merge    = "when-green"
 
+# GitHub:
 # provider = "github"
 # api      = ""                       # defaults to https://api.github.com
-# base     = "main"
+#
+# GitLab:
+# provider = "gitlab"
+# api      = ""                       # defaults to https://gitlab.com/api/v4

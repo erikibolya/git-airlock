@@ -40,7 +40,7 @@ func TestWriteLoad(t *testing.T) {
 func TestValidate(t *testing.T) {
 	cases := []Config{
 		{Repo: "nope", Provider: "gitea", API: "https://x/api/v1", Mirror: "/m", Queue: "/q", Base: "main", Merge: "never"},
-		{Repo: "o/r", Provider: "gitlab", Mirror: "/m", Queue: "/q", Base: "main", Merge: "never"},
+		{Repo: "o/r", Provider: "bitbucket", Mirror: "/m", Queue: "/q", Base: "main", Merge: "never"},
 		{Repo: "o/r", Provider: "gitea", Mirror: "/m", Queue: "/q", Base: "main", Merge: "sometimes"},
 	}
 	for i, c := range cases {
