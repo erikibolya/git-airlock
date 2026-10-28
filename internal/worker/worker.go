@@ -28,7 +28,7 @@ type Worker struct {
 
 // New builds a worker for one repository config.
 func New(cfg *config.Config, p provider.Provider) (*Worker, error) {
-	q, err := queue.Open(cfg.Queue, cfg.Mirror)
+	q, err := queue.Open(cfg.Queue, cfg.Mirror, cfg.QueueRemote)
 	if err != nil {
 		return nil, err
 	}
