@@ -278,14 +278,15 @@ func (a *App) Cancel() {
 // updateWorkerTask points the scheduled worker at the same repositories. It is
 // skipped for dev builds that do not ship airlock.exe next to the desktop exe.
 func updateWorkerTask(paths []string) error {
-	if goruntime.GOOS != "windows" {
-		return nil
-	}
 	self, err := os.Executable()
 	if err != nil {
 		return nil
 	}
-	exe := filepath.Join(filepath.Dir(self), "airlock.exe")
+	name := "airlock"
+	if goruntime.GOOS == "windows" {
+		name = "airlock.exe"
+	}
+	exe := filepath.Join(filepath.Dir(self), name)
 	if _, err := os.Stat(exe); err != nil {
 		return nil
 	}

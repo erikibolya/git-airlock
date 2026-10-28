@@ -123,16 +123,16 @@ func headers(next http.Handler) http.Handler {
 }
 
 type pageData struct {
-	Title      string
-	Config     *config.Config
-	CSRF       string
-	Flash      string
-	Error      string
-	Pending    []queue.Request
-	Results    []queue.Result
-	Result     *queue.Result
-	ResultJSON string
-	Logs       string
+	Title       string
+	Config      *config.Config
+	CSRF        string
+	Flash       string
+	Error       string
+	Pending     []queue.Request
+	Results     []queue.Result
+	Result      *queue.Result
+	ResultJSON  string
+	Logs        string
 	QueueMode   string
 	AuthMode    string
 	Now         time.Time
