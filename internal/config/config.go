@@ -33,6 +33,10 @@ type Config struct {
 	Base string `toml:"base"`
 	// Merge is the default merge policy: never, when-green or now.
 	Merge string `toml:"merge"`
+	// AutoPR opens a pull request for every local branch that is ahead of Base.
+	AutoPR bool `toml:"auto_pr"`
+	// AutoPRIgnore lists branch globs (filepath.Match) that AutoPR skips.
+	AutoPRIgnore []string `toml:"auto_pr_ignore"`
 }
 
 // Filename is the per-repository config file name.
@@ -204,6 +208,12 @@ base = %q
 
 # Default merge policy: never, when-green or now.
 merge = %q
+
+# Open a pull request automatically for every branch that is ahead of base.
+auto_pr = false
+
+# Branch patterns that auto_pr ignores (filepath.Match syntax).
+# auto_pr_ignore = ["wip/*", "dependabot/*"]
 `, c.Repo, c.Remote, c.Mirror, c.Queue, c.QueueRemote, c.Provider, c.API, c.CA, c.Base, c.Merge)
 	return os.WriteFile(path, []byte(body), 0o644)
 }

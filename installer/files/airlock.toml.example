@@ -34,3 +34,9 @@ base = "main"
 
 # Default merge policy: never, when-green or now.
 merge = "when-green"
+
+# Open a pull request automatically for every local branch that is ahead of base.
+auto_pr = false
+
+# Branch globs that auto_pr ignores (Go filepath.Match syntax).
+# auto_pr_ignore = ["wip/*", "dependabot/*"]

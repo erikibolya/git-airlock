@@ -588,6 +588,12 @@ func cmdWorker(ctx context.Context, args []string) error {
 					fmt.Fprintf(os.Stderr, "sync %s: %v\n", r.cfg.Repo, err)
 				}
 			}
+			if n, err := r.w.AutoOpen(ctx); err != nil {
+				r.w.Q.Log("auto-pr failed: %v", err)
+				fmt.Fprintf(os.Stderr, "auto-pr %s: %v\n", r.cfg.Repo, err)
+			} else if n > 0 {
+				fmt.Printf("auto-pr: queued %d request(s) for %s\n", n, r.cfg.Repo)
+			}
 			n, err := r.w.Run(ctx)
 			if err != nil {
 				r.w.Q.Log("worker failed: %v", err)

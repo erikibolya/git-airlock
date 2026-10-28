@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/erikibolya/git-airlock/internal/config"
@@ -287,5 +289,121 @@ func TestStatusClosed(t *testing.T) {
 	res, _ := q.ReadResult(id)
 	if !res.OK || !res.Merged {
 		t.Fatalf("result=%+v", res)
+	}
+}
+
+func testGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=Test", "GIT_AUTHOR_EMAIL=test@example.com",
+		"GIT_COMMITTER_NAME=Test", "GIT_COMMITTER_EMAIL=test@example.com",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func commitTestFile(t *testing.T, dir, name, content, msg string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testGit(t, dir, "add", name)
+	testGit(t, dir, "commit", "-m", msg)
+}
+
+// autoPRMirror builds a bare mirror with main, feature (ahead) and wip/x (ahead).
+func autoPRMirror(t *testing.T) string {
+	t.Helper()
+	mirror := filepath.Join(t.TempDir(), "mirror.git")
+	testGit(t, "", "init", "--bare", mirror)
+	testGit(t, mirror, "symbolic-ref", "HEAD", "refs/heads/main")
+
+	work := t.TempDir()
+	testGit(t, work, "init")
+	testGit(t, work, "checkout", "-b", "main")
+	commitTestFile(t, work, "a.txt", "a", "base")
+	testGit(t, work, "remote", "add", "origin", mirror)
+	testGit(t, work, "push", "origin", "main")
+
+	testGit(t, work, "checkout", "-b", "feature")
+	commitTestFile(t, work, "b.txt", "b", "feature work")
+	testGit(t, work, "push", "origin", "feature")
+
+	testGit(t, work, "checkout", "main")
+	testGit(t, work, "checkout", "-b", "wip/x")
+	commitTestFile(t, work, "c.txt", "c", "scratch")
+	testGit(t, work, "push", "origin", "wip/x")
+	return mirror
+}
+
+func TestAutoOpenQueuesAheadBranches(t *testing.T) {
+	mirror := autoPRMirror(t)
+	cfg := &config.Config{
+		Repo: "o/r", Provider: "github", Mirror: mirror, Queue: t.TempDir(),
+		Base: "main", Merge: "when-green", AutoPR: true, AutoPRIgnore: []string{"wip/*"},
+	}
+	q := queue.New(cfg.Queue)
+	if err := q.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeProvider{checks: provider.ChecksSuccess}
+	w, err := New(cfg, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := w.AutoOpen(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("queued %d, want 1 (wip/x ignored, main is base)", n)
+	}
+	pending, err := q.Pending()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("pending = %d, want 1", len(pending))
+	}
+	req := pending[0]
+	if req.Head != "feature" || req.Merge != "when-green" || req.HeadSHA == "" || req.Title != "feature work" {
+		t.Fatalf("unexpected request: %+v", req)
+	}
+
+	// A second scan must not duplicate the queued request.
+	if n, err := w.AutoOpen(context.Background()); err != nil || n != 0 {
+		t.Fatalf("second AutoOpen = %d, %v; want 0", n, err)
+	}
+}
+
+func TestAutoOpenSkipsOpenPR(t *testing.T) {
+	mirror := autoPRMirror(t)
+	cfg := &config.Config{
+		Repo: "o/r", Provider: "github", Mirror: mirror, Queue: t.TempDir(),
+		Base: "main", Merge: "when-green", AutoPR: true,
+	}
+	q := queue.New(cfg.Queue)
+	if err := q.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	// main is skipped as the base; feature and wip/x both see the same open PR.
+	f := &fakeProvider{pr: &provider.PR{Number: 7, State: "open", HeadSHA: "abc"}, checks: provider.ChecksPending}
+	w, err := New(cfg, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := w.AutoOpen(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("queued %d, want 0 when an open PR exists", n)
 	}
 }

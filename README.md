@@ -224,6 +224,8 @@ api      = "https://gitea.example.com/api/v1"
 ca       = ""                        # optional PEM bundle
 base     = "main"                    # default PR target
 merge    = "when-green"              # never | when-green | now
+auto_pr  = false                     # open PRs for branches ahead of base
+auto_pr_ignore = ["wip/*"]           # optional branch globs to skip
 ```
 
 The file contains no secrets; it can be committed if the paths are the same on
@@ -286,6 +288,28 @@ For GitLab, the latest pipeline for the PR head SHA gates the merge.
 
 If a repository has no CI at all the request stays pending forever by design;
 use `--merge never` or `--merge now` explicitly.
+
+## Automatic pull requests
+
+Set `auto_pr = true` and every worker run opens a PR for each local branch in the
+mirror that is ahead of `base` and has no open PR yet. The branch tip's commit
+subject becomes the title, and the PR merges according to `merge` (normally
+`when-green`). Pushing a branch is then enough:
+
+```bash
+git push origin feature/login        # into the mirror, no VPN needed
+# worker: opens feature/login -> main, waits for CI, merges
+```
+
+Rules:
+
+- `base` itself is skipped, and `auto_pr_ignore = ["wip/*"]` skips patterns.
+- A merged PR (including squash merges) or a PR you closed is not reopened for
+  the same commit; new commits on the branch produce a fresh PR.
+- An existing open PR is left to its creator, so `airlock pr open --merge never`
+  keeps its merge mode.
+- Auto-created requests show up in the dashboard and worker log like any other
+  request, so you can still see exactly what was queued.
 
 ## Security model
 
