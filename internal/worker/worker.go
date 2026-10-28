@@ -64,7 +64,9 @@ func (w *Worker) Run(ctx context.Context) (int, error) {
 			continue
 		}
 		if !res.Pending {
-			_ = w.Q.MarkProcessed(req.ID)
+			if err := w.Q.MarkProcessed(req.ID); err != nil {
+				w.Q.Log("%s: cannot mark processed: %v", req.ID, err)
+			}
 		}
 		w.Q.Log("%s %s ok=%v pending=%v: %s", req.ID, req.Action, res.OK, res.Pending, res.Message)
 	}
