@@ -48,8 +48,13 @@ if (-not $SkipDesktop) {
     } finally {
         Pop-Location
     }
-    Copy-Item (Join-Path $root "desktop\build\bin\airlock-desktop.exe") (Join-Path $files "airlock-desktop.exe") -Force
 }
+
+$desktopExe = Join-Path $root "desktop\build\bin\airlock-desktop.exe"
+if (-not (Test-Path $desktopExe)) {
+    throw "airlock-desktop.exe is missing; build the desktop app first (drop -SkipDesktop)."
+}
+Copy-Item $desktopExe (Join-Path $files "airlock-desktop.exe") -Force
 
 $goExe = Resolve-Command "go" @()
 if (-not $goExe) { throw "go not found on PATH." }
