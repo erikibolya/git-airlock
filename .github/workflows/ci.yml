@@ -25,3 +25,19 @@ jobs:
         run: go test ./...
       - name: Build
         run: go build ./cmd/airlock
+
+  desktop:
+    # The desktop module imports internal/ packages and only builds on Windows
+    # without the WebKitGTK headers.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+      - name: Vet
+        working-directory: desktop
+        run: go vet ./...
+      - name: Build
+        working-directory: desktop
+        run: go build ./...
