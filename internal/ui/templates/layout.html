@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Git Airlock</title>
+<style>
+:root{color-scheme:light dark;--bg:#f6f8fb;--card:#fff;--fg:#0f172a;--muted:#64748b;--line:#e2e8f0;--accent:#2563eb;--ok:#059669;--warn:#b45309;--err:#dc2626}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1120;--card:#111a2e;--fg:#e2e8f0;--muted:#94a3b8;--line:#1e293b;--accent:#60a5fa;--ok:#34d399;--warn:#fbbf24;--err:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--fg)}
+header{display:flex;gap:1rem;align-items:baseline;padding:.85rem 1.5rem;border-bottom:1px solid var(--line);background:var(--card);position:sticky;top:0;z-index:2}
+.brand{font-weight:700;font-size:1.1rem}.repo{color:var(--muted);font-size:.9rem}
+nav{margin-left:auto;display:flex;gap:1.1rem}nav a{color:var(--accent);text-decoration:none;font-size:.9rem}
+main{max-width:1150px;margin:0 auto;padding:1.5rem}
+h2{font-size:1.05rem;margin:1.5rem 0 .7rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:1rem}
+.card h2{margin:0 0 .6rem}
+label{display:block;font-size:.78rem;color:var(--muted);margin:.55rem 0 .15rem;text-transform:uppercase;letter-spacing:.03em}
+input,select,textarea,button{width:100%;padding:.45rem .55rem;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
+input[type=checkbox]{width:auto;margin-right:.45rem;vertical-align:middle}
+textarea{min-height:4.2rem;resize:vertical}
+button{background:var(--accent);color:#fff;border:0;cursor:pointer;font-weight:600;margin-top:.7rem}
+button:hover{filter:brightness(1.08)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--line);vertical-align:top;font-size:.88rem}
+th{color:var(--muted);font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em}
+tr:last-child td{border-bottom:0}
+.flash,.error{padding:.65rem .85rem;border-radius:8px;margin-bottom:1rem;border:1px solid}
+.flash{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+.error{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+@media (prefers-color-scheme:dark){.flash{background:#052e1b;border-color:#065f46;color:#a7f3d0}.error{background:#3f0d0d;border-color:#7f1d1d;color:#fecaca}}
+.muted{color:var(--muted)}.ok{color:var(--ok);font-weight:600}.warn{color:var(--warn);font-weight:600}.err{color:var(--err);font-weight:600}
+pre{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:1rem;overflow:auto;font-size:.84rem;line-height:1.45}
+footer{max-width:1150px;margin:0 auto;padding:0 1.5rem 2rem;color:var(--muted);font-size:.78rem}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Git Airlock</div>
+  <div class="repo">{{.Config.Repo}} · {{.Config.Provider}}</div>
+  <nav><a href="/">dashboard</a><a href="/logs">logs</a></nav>
+</header>
+<main>
+{{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
+{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+{{template "content" .}}
+</main>
+<footer>queue: {{.QueueMode}} · base: {{.Config.Base}} · default merge: {{.Config.Merge}} · {{.AuthMode}}</footer>
+</body>
+</html>

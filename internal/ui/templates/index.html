@@ -1,0 +1,111 @@
+{{define "content"}}
+<section class="cards">
+  <div class="card">
+    <h2>Open pull request</h2>
+    <form method="post" action="/pr/open">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <label for="head">Head branch</label>
+      <input id="head" name="head" placeholder="feature-branch" required>
+      <div class="row">
+        <div>
+          <label for="base">Base</label>
+          <input id="base" name="base" value="{{.Config.Base}}">
+        </div>
+        <div>
+          <label for="merge">Merge</label>
+          <select id="merge" name="merge">
+            <option value="when-green" {{if eq .Config.Merge "when-green"}}selected{{end}}>when green</option>
+            <option value="never" {{if eq .Config.Merge "never"}}selected{{end}}>never</option>
+            <option value="now" {{if eq .Config.Merge "now"}}selected{{end}}>now</option>
+          </select>
+        </div>
+      </div>
+      <label for="title">Title</label>
+      <input id="title" name="title" placeholder="optional; defaults to the last commit">
+      <label for="body">Body</label>
+      <textarea id="body" name="body" placeholder="optional"></textarea>
+      <label><input type="checkbox" name="dry_run"> dry run only</label>
+      <button type="submit">Queue open PR</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Check pull request</h2>
+    <form method="post" action="/pr/status">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <label for="status-number">PR number</label>
+      <input id="status-number" name="number" type="number" min="1" required>
+      <button type="submit">Queue status check</button>
+    </form>
+
+    <h2 style="margin-top:1.25rem">Merge pull request</h2>
+    <form method="post" action="/pr/merge">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <label for="merge-number">PR number</label>
+      <input id="merge-number" name="number" type="number" min="1" required>
+      <label><input type="checkbox" name="when_green" checked> merge only when checks are green</label>
+      <button type="submit">Queue merge</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Mirror sync</h2>
+    <p class="muted">Runs on this machine and needs the company VPN. The scheduled worker does this automatically; use it when you want an immediate sync.</p>
+    <form method="post" action="/sync">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button type="submit">Sync now</button>
+    </form>
+    <p class="muted">mirror: <code>{{.Config.Mirror}}</code></p>
+  </div>
+</section>
+
+<h2>Pending requests <span class="muted">({{len .Pending}})</span></h2>
+{{if .Pending}}
+<table>
+  <thead><tr><th>ID</th><th>Action</th><th>Details</th><th>Merge</th></tr></thead>
+  <tbody>
+  {{range .Pending}}
+    <tr>
+      <td class="muted">{{.ID}}</td>
+      <td>{{.Action}}</td>
+      <td>
+        {{if eq .Action "open"}}
+          {{.Head}} → {{.Base}}
+          {{if .Title}}<br><span class="muted">{{.Title}}</span>{{end}}
+        {{else}}
+          #{{.Number}}
+        {{end}}
+      </td>
+      <td>{{if .Merge}}{{.Merge}}{{else}}—{{end}}{{if .DryRun}} <span class="warn">dry</span>{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">Queue is empty.</p>
+{{end}}
+
+<h2>Recent results</h2>
+{{if .Results}}
+<table>
+  <thead><tr><th>ID</th><th>Action</th><th>Status</th><th>PR</th><th>Message</th></tr></thead>
+  <tbody>
+  {{range .Results}}
+    <tr>
+      <td><a href="/result/{{.ID}}">{{.ID}}</a></td>
+      <td>{{.Action}}</td>
+      <td>
+        {{if .OK}}<span class="ok">ok</span>
+        {{else if .Pending}}<span class="warn">pending</span>
+        {{else}}<span class="err">failed</span>{{end}}
+      </td>
+      <td>{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noreferrer">#{{.PR}}</a>{{else}}{{if .PR}}#{{.PR}}{{end}}{{end}}</td>
+      <td>{{.Message}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No results yet.</p>
+{{end}}
+{{end}}

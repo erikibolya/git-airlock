@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -174,12 +175,68 @@ func (g *GitStore) Wait(ctx context.Context, id string, interval time.Duration, 
 	}
 }
 
-func (g *GitStore) Log(format string, args ...any) {
+// ListResults returns the newest results first.
+func (g *GitStore) ListResults(limit int) ([]Result, error) {
+	out, err := g.git(context.Background(), "", "for-each-ref", "--format=%(refname) %(objectname)", strings.TrimSuffix(resultsRef, "/"))
+	if err != nil {
+		return nil, err
+	}
+	type pair struct {
+		ref string
+		sha string
+	}
+	var pairs []pair
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 || !strings.HasPrefix(fields[0], resultsRef) {
+			continue
+		}
+		pairs = append(pairs, pair{ref: fields[0], sha: fields[1]})
+	}
+	sort.Slice(pairs, func(i, j int) bool { return pairs[i].ref > pairs[j].ref })
+	if limit <= 0 {
+		limit = 20
+	}
+	results := make([]Result, 0, limit)
+	for _, p := range pairs {
+		if len(results) >= limit {
+			break
+		}
+		data, err := g.git(context.Background(), "", "cat-file", "-p", p.sha)
+		if err != nil {
+			continue
+		}
+		var res Result
+		if json.Unmarshal([]byte(data), &res) != nil {
+			continue
+		}
+		results = append(results, res)
+	}
+	return results, nil
+}
+
+// TailLog returns the last lines of the local worker log.
+func (g *GitStore) TailLog(lines int) (string, error) {
+	path := g.logPath()
+	if path == "" {
+		return "", nil
+	}
+	return tailFile(path, lines)
+}
+
+func (g *GitStore) logPath() string {
 	dir, err := os.UserCacheDir()
 	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "git-airlock", "worker.log")
+}
+
+func (g *GitStore) Log(format string, args ...any) {
+	path := g.logPath()
+	if path == "" {
 		return
 	}
-	path := filepath.Join(dir, "git-airlock", "worker.log")
 	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	if st, err := os.Stat(path); err == nil && st.Size() > 1<<20 {
 		_ = os.Rename(path, path+".1")

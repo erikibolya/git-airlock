@@ -120,6 +120,7 @@ airlock pr status <n>
 airlock pr merge <n> --when-green
 airlock worker               sync + process the queue once
 airlock worker --loop 1m     run continuously
+airlock ui                   local web dashboard
 airlock doctor               diagnose config, CA, token, VPN, scheduler
 airlock install-task         register the periodic worker
 airlock instructions         print an AGENTS.md snippet
@@ -127,6 +128,31 @@ airlock instructions         print an AGENTS.md snippet
 
 `airlock pr` exit codes: `0` done, `1` failed, `3` still queued (the worker
 keeps retrying; check the result file later instead of resubmitting).
+
+## Web dashboard
+
+```bash
+airlock ui --config /path/to/.airlock.toml
+# airlock ui: http://127.0.0.1:8787/
+```
+
+The dashboard shows pending requests, recent results, the worker log, and forms
+to queue open/status/merge actions plus an immediate sync. It never holds the
+API token and never calls the git host: buttons only write requests to the
+queue, exactly like the CLI.
+
+**Localhost vs LAN.** The default bind is `127.0.0.1:8787`, so only the computer
+running the UI can open it. To view it from another device on your network:
+
+```bash
+airlock ui --listen 0.0.0.0:8787
+# access token: <random token>
+```
+
+Airlock then requires that token; open the printed URL once and it is stored in
+an HttpOnly cookie. Use this only on a network you trust — the dashboard can
+enqueue merges, though the worker still waits for green checks. `--open` launches
+the browser.
 
 ## Configuration
 
@@ -242,8 +268,8 @@ system.
 - Gitea, GitHub and GitLab are supported today.
 - No PR review automation, labels, or release automation (beyond GitHub
   releases of Airlock itself).
-- A small local web dashboard is planned; the CLI and the queue remain the
-  source of truth.
+- The web dashboard is loopback-first; LAN exposure requires an access token.
+  The CLI and the queue remain the source of truth; the UI is a convenience.
 
 ## Development
 

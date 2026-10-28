@@ -1,0 +1,9 @@
+{{define "content"}}
+<h2>Worker log</h2>
+<p><a href="/logs">refresh</a> · <span class="muted">last 250 lines</span></p>
+{{if .Logs}}
+<pre>{{.Logs}}</pre>
+{{else}}
+<p class="muted">No log yet.</p>
+{{end}}
+{{end}}

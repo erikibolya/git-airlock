@@ -62,6 +62,8 @@ type Store interface {
 	ReadResult(string) (*Result, error)
 	MarkProcessed(string) error
 	Wait(ctx context.Context, id string, interval time.Duration, onChange func(*Result)) (*Result, error)
+	ListResults(limit int) ([]Result, error)
+	TailLog(lines int) (string, error)
 	Log(format string, args ...any)
 	Location(id string) string
 }
@@ -201,6 +203,66 @@ func (q *Queue) ReadResult(id string) (*Result, error) {
 		return nil, err
 	}
 	return &res, nil
+}
+
+// ListResults returns the newest results first.
+func (q *Queue) ListResults(limit int) ([]Result, error) {
+	entries, err := os.ReadDir(q.ResultsDir())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(names)))
+	if limit <= 0 {
+		limit = 20
+	}
+	out := make([]Result, 0, limit)
+	for _, name := range names {
+		if len(out) >= limit {
+			break
+		}
+		data, err := os.ReadFile(filepath.Join(q.ResultsDir(), name))
+		if err != nil {
+			continue
+		}
+		var res Result
+		if json.Unmarshal(data, &res) != nil {
+			continue
+		}
+		out = append(out, res)
+	}
+	return out, nil
+}
+
+// TailLog returns the last lines of the worker log.
+func (q *Queue) TailLog(lines int) (string, error) {
+	return tailFile(filepath.Join(q.LogDir(), "worker.log"), lines)
+}
+
+func tailFile(path string, lines int) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	if lines <= 0 {
+		lines = 200
+	}
+	parts := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(parts) > lines {
+		parts = parts[len(parts)-lines:]
+	}
+	return strings.Join(parts, "\n") + "\n", nil
 }
 
 // MarkProcessed moves a final request out of the queue.

@@ -8,11 +8,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -26,6 +29,7 @@ import (
 	"github.com/erikibolya/git-airlock/internal/provider/github"
 	"github.com/erikibolya/git-airlock/internal/provider/gitlab"
 	"github.com/erikibolya/git-airlock/internal/queue"
+	"github.com/erikibolya/git-airlock/internal/ui"
 	"github.com/erikibolya/git-airlock/internal/worker"
 )
 
@@ -68,6 +72,8 @@ func run(ctx context.Context, args []string) error {
 		return cmdPR(ctx, args[1:])
 	case "worker":
 		return cmdWorker(ctx, args[1:])
+	case "ui":
+		return cmdUI(ctx, args[1:])
 	case "doctor":
 		return cmdDoctor(ctx, args[1:])
 	case "install-task":
@@ -110,6 +116,8 @@ Usage:
   airlock pr status <number> [--wait 2m|--no-wait] [--config PATH]
   airlock pr merge  <number> [--when-green] [--wait 2m|--no-wait] [--config PATH]
   airlock worker    [--config PATH] [--no-sync] [--loop 1m]
+  airlock ui        [--config PATH] [--listen 127.0.0.1:8787]
+                    [--token TOKEN] [--open]
   airlock doctor    [--config PATH]
   airlock install-task [--config PATH] [--name "Git Airlock"]
                        [--interval 1m] [--print]
@@ -550,6 +558,96 @@ func cmdWorker(ctx context.Context, args []string) error {
 		case <-time.After(*loop):
 		}
 	}
+}
+
+// ---------- ui ----------
+
+func cmdUI(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("ui", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	configPath := fs.String("config", "", "config path")
+	listen := fs.String("listen", "127.0.0.1:8787", "listen address (host:port)")
+	token := fs.String("token", "", "access token; required for non-loopback binds")
+	openFlag := fs.Bool("open", false, "open the dashboard in a browser")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, _, err := loadConfig(*configPath)
+	if err != nil {
+		return err
+	}
+	host, port, err := net.SplitHostPort(*listen)
+	if err != nil {
+		return fmt.Errorf("--listen must be host:port: %w", err)
+	}
+	loopback := host == "localhost"
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		loopback = true
+	}
+	if !loopback && *token == "" {
+		*token = ui.NewAccessToken()
+		fmt.Printf("access token: %s\n", *token)
+	}
+
+	srv, err := ui.New(cfg, *token)
+	if err != nil {
+		return err
+	}
+	httpSrv := &http.Server{
+		Addr:              *listen,
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	ln, err := net.Listen("tcp", *listen)
+	if err != nil {
+		return err
+	}
+	errCh := make(chan error, 1)
+	go func() { errCh <- httpSrv.Serve(ln) }()
+
+	showHost := host
+	if showHost == "" || showHost == "0.0.0.0" || showHost == "::" {
+		showHost = "127.0.0.1"
+	}
+	link := fmt.Sprintf("http://%s/", net.JoinHostPort(showHost, port))
+	if *token != "" {
+		link += "?token=" + url.QueryEscape(*token)
+	}
+	fmt.Printf("airlock ui: %s\n", link)
+	if !loopback {
+		fmt.Printf("listening on all interfaces; open http://<this-machine-ip>:%s/ with the token above\n", port)
+	}
+	if *openFlag {
+		openBrowser(link)
+	}
+
+	select {
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpSrv.Shutdown(shutdownCtx)
+		return nil
+	}
+}
+
+func openBrowser(u string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", "", u)
+	case "darwin":
+		cmd = exec.Command("open", u)
+	default:
+		cmd = exec.Command("xdg-open", u)
+	}
+	_ = cmd.Start()
 }
 
 // ---------- doctor ----------
