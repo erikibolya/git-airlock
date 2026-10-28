@@ -80,13 +80,25 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
       - name: Build desktop app
         working-directory: desktop
-        run: wails build -clean -platform windows/amd64
+        run: wails build -clean -platform windows/amd64 -ldflags "-X main.version=${{ github.ref_name }}"
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
         shell: pwsh
       - name: Build installer
         shell: pwsh
         run: ./installer/build.ps1 -SkipDesktop -Version ${{ github.ref_name }}
+      - name: Build update manifest
+        shell: pwsh
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          New-Item -ItemType Directory -Force dist | Out-Null
+          go run ./cmd/updatesign manifest --version $version `
+            --installer "installer/dist/GitAirlockSetup-$version.exe" `
+            --url "https://github.com/erikibolya/git-airlock/releases/download/v$version/GitAirlockSetup-$version.exe" `
+            --notes "See https://github.com/erikibolya/git-airlock/releases/tag/v$version" `
+            --out "dist/latest.json"
       - name: Stage release files
         shell: pwsh
         run: |
@@ -115,5 +127,6 @@ jobs:
             dist/*.tar.gz
             dist/airlock-desktop.exe
             dist/GitAirlockSetup-*.exe
+            dist/latest.json
             dist/checksums.txt
           generate_release_notes: true

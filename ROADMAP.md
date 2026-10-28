@@ -57,6 +57,8 @@
 - **v1.6.3** — batched queue reads (`cat-file --batch`) for fast dashboard
   loads on SMB, a 60-second refresh and direct in-app navigation from the native
   menu.
+- **v1.7** — signed in-app updates: `latest.json` with an Ed25519 signature,
+  startup and menu checks, verified installer download and restart.
 
 ## Next
 
