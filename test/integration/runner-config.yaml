@@ -1,0 +1,21 @@
+log:
+  level: info
+
+runner:
+  file: /data/.runner
+  capacity: 1
+  labels:
+    - "ubuntu-latest:docker://node:20-bookworm"
+
+cache:
+  enabled: false
+
+container:
+  docker_host: "tcp://dind:2375"
+  workdir_parent: /data/work
+  valid_volumes:
+    - "**"
+  force_pull: true
+
+host:
+  workdir_parent: /data/work

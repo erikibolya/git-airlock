@@ -10,15 +10,34 @@ services:
       GITEA__actions__ENABLED: "true"
     ports:
       - "3000:3000"
+  dind:
+    image: docker:27-dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command: ["--tls=false", "--host=tcp://0.0.0.0:2375"]
+    volumes:
+      - runnerwork:/data
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
   runner:
     image: gitea/act_runner:0.2.11
     environment:
       GITEA_INSTANCE_URL: "http://gitea:3000"
       GITEA_RUNNER_REGISTRATION_TOKEN: "${RUNNER_TOKEN}"
       GITEA_RUNNER_NAME: "integration"
-      GITEA_RUNNER_LABELS: "ubuntu-latest:host"
+      CONFIG_FILE: "/config.yaml"
+    volumes:
+      - ./runner-config.yaml:/config.yaml:ro
+      - runnerwork:/data
     depends_on:
-      - gitea
+      gitea:
+        condition: service_started
+      dind:
+        condition: service_healthy
   tool:
     build:
       context: ../..
@@ -31,3 +50,6 @@ services:
       - ./workspace:/work
       - ./:/run/airlock:ro
     working_dir: /work
+
+volumes:
+  runnerwork:

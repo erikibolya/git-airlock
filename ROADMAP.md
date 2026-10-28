@@ -47,6 +47,9 @@
   squash merge → branch cleanup path.
 - **v1.5** — sync over SSH with a managed mirror cache (`mirror_remote`,
   `remote_url`) and a real `act_runner` in the Docker integration test.
+- **v1.6** — packaging (Homebrew tap, Scoop bucket, winget manifests) and
+  Docker-in-Docker job containers in the integration test (dind service, shared
+  workspace volume, act_runner `container.docker_host`).
 
 ## Next
 
@@ -61,10 +64,9 @@ improvement could add per-event filtering or an "urgent" toast.
 Optional labels (`airlock:auto-merge`), reviewers, and a "merge only when
 approved" policy.
 
-### Packaging
+### Linux packages
 
-The Windows installer covers the direct-download case (CLI, desktop app,
-autostart, worker task). Homebrew, Scoop/winget and Linux packages are still
+Homebrew covers Linux and macOS; distribution packages (deb/rpm) are still
 missing.
 
 ### Gitea Actions coverage

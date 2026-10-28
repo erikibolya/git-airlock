@@ -60,8 +60,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "act_runner integration OK"
-        shell: sh
+      - run: node --version
+        shell: bash
+      - run: echo "act_runner container job OK"
+        shell: bash
 YAML
 git add .gitea/workflows/ci.yml
 git commit -m "ci: integration workflow"
