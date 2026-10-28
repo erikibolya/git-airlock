@@ -148,6 +148,12 @@ func buildBox(paths []string) (*dashBox, error) {
 // ServeHTTP is the Wails asset handler. The repository picker takes over while
 // setupMode is set or until at least one config loads.
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// The picker is plain HTML served by us, not the generated Wails frontend,
+	// so it cannot use window.go bindings. These endpoints back its buttons.
+	if strings.HasPrefix(r.URL.Path, "/_airlock/") {
+		a.serveAction(w, r)
+		return
+	}
 	if p := r.URL.Path; strings.HasPrefix(p, "/repo/") {
 		rest := strings.TrimPrefix(p, "/repo/")
 		if i := strings.IndexByte(rest, '/'); i > 0 {
@@ -418,6 +424,32 @@ func updateWorkerTask(paths []string) error {
 	})
 }
 
+// serveAction implements the repository picker's buttons. It deliberately uses
+// HTTP instead of Wails bindings: the picker replaces the generated frontend,
+// so window.go is not available there.
+func (a *App) serveAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var res PickResult
+	switch r.URL.Path {
+	case "/_airlock/repos/add":
+		res = a.AddConfig()
+	case "/_airlock/repos/remove":
+		res = a.RemoveConfig(r.URL.Query().Get("path"))
+	case "/_airlock/start":
+		res = a.Start()
+	case "/_airlock/cancel":
+		a.Cancel()
+	default:
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(res)
+}
+
 func (a *App) serveSetup(w http.ResponseWriter, _ *http.Request) {
 	a.mu.Lock()
 	paths := append([]string(nil), a.paths...)
@@ -508,29 +540,29 @@ const setupHTML = `<!doctype html>
 (function () {
   var status = document.getElementById('status');
   function say(text, cls) { status.textContent = text || ''; status.className = 'status' + (cls ? ' ' + cls : ''); }
-  function bind() { return window.go && window.go.main && window.go.main.App; }
+  function call(path, body) {
+    return fetch(path, { method: 'POST', body: body || null, headers: { 'Content-Type': 'application/json' } })
+      .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); });
+  }
   document.getElementById('add').addEventListener('click', function () {
-    var app = bind();
-    if (!app) { say('Native bindings are still loading, try again.', 'err'); return; }
-    app.AddConfig().then(function (r) {
+    say('Choose a config…');
+    call('/_airlock/repos/add').then(function (r) {
       if (r && r.error) { say(r.error, 'err'); return; }
-      if (r && r.path) { window.location.reload(); }
+      if (r && r.path) { window.location.reload(); return; }
+      say('');
     }).catch(function (e) { say(String(e), 'err'); });
   });
   var buttons = document.querySelectorAll('button.remove');
   for (var i = 0; i < buttons.length; i++) {
     buttons[i].addEventListener('click', function () {
-      var app = bind();
-      if (!app) { say('Native bindings are still loading, try again.', 'err'); return; }
-      app.RemoveConfig(this.getAttribute('data-path')).then(function () { window.location.reload(); })
+      call('/_airlock/repos/remove?path=' + encodeURIComponent(this.getAttribute('data-path')))
+        .then(function () { window.location.reload(); })
         .catch(function (e) { say(String(e), 'err'); });
     });
   }
   document.getElementById('start').addEventListener('click', function () {
-    var app = bind();
-    if (!app) { say('Native bindings are still loading, try again.', 'err'); return; }
     say('Checking…');
-    app.Start().then(function (r) {
+    call('/_airlock/start').then(function (r) {
       if (r && r.error) { say(r.error, 'err'); return; }
       say('Starting…', 'ok');
       window.location.replace('/');
@@ -539,10 +571,8 @@ const setupHTML = `<!doctype html>
   var cancel = document.getElementById('cancel');
   if (cancel) {
     cancel.addEventListener('click', function () {
-      var app = bind();
-      if (!app) { return; }
-      app.Cancel();
-      window.location.replace('/');
+      call('/_airlock/cancel').then(function () { window.location.replace('/'); })
+        .catch(function () { window.location.replace('/'); });
     });
   }
 })();
