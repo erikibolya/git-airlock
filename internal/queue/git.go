@@ -1,15 +1,19 @@
 package queue
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/erikibolya/git-airlock/internal/proc"
 	"hash/fnv"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -74,7 +78,11 @@ func (g *GitStore) Pending() ([]Request, error) {
 	if err != nil {
 		return nil, err
 	}
-	var refs []string
+	type pair struct {
+		id  string
+		sha string
+	}
+	var refs []pair
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -84,28 +92,92 @@ func (g *GitStore) Pending() ([]Request, error) {
 		if len(fields) != 2 || !strings.HasPrefix(fields[0], requestsRef) {
 			continue
 		}
-		refs = append(refs, line)
+		refs = append(refs, pair{id: strings.TrimPrefix(fields[0], requestsRef), sha: fields[1]})
+	}
+	shas := make([]string, len(refs))
+	for i, r := range refs {
+		shas[i] = r.sha
+	}
+	objects, err := g.readObjects(shas)
+	if err != nil {
+		return nil, err
 	}
 	outReqs := make([]Request, 0, len(refs))
-	for _, line := range refs {
-		fields := strings.Fields(line)
-		id := strings.TrimPrefix(fields[0], requestsRef)
-		data, err := g.git(context.Background(), "", "cat-file", "-p", fields[1])
-		if err != nil {
-			outReqs = append(outReqs, Request{ID: id, Action: ActionBroken})
+	for _, ref := range refs {
+		data, ok := objects[ref.sha]
+		if !ok {
+			outReqs = append(outReqs, Request{ID: ref.id, Action: ActionBroken})
 			continue
 		}
 		var req Request
-		if err := json.Unmarshal([]byte(data), &req); err != nil {
-			outReqs = append(outReqs, Request{ID: id, Action: ActionBroken})
+		if err := json.Unmarshal(data, &req); err != nil {
+			outReqs = append(outReqs, Request{ID: ref.id, Action: ActionBroken})
 			continue
 		}
 		if req.ID == "" {
-			req.ID = id
+			req.ID = ref.id
 		}
 		outReqs = append(outReqs, req)
 	}
 	return outReqs, nil
+}
+
+// readObjects reads many blobs with a single cat-file --batch process. This
+// matters on SMB/NFS mirrors where every git invocation is expensive.
+func (g *GitStore) readObjects(shas []string) (map[string][]byte, error) {
+	if len(shas) == 0 {
+		return map[string][]byte{}, nil
+	}
+	var in strings.Builder
+	for _, sha := range shas {
+		in.WriteString(sha)
+		in.WriteByte('\n')
+	}
+	out, err := g.gitOutput(context.Background(), in.String(), "cat-file", "--batch")
+	if err != nil {
+		return nil, err
+	}
+	objects := make(map[string][]byte, len(shas))
+	reader := bufio.NewReader(strings.NewReader(string(out)))
+	for {
+		header, err := reader.ReadString('\n')
+		if err != nil {
+			break
+		}
+		fields := strings.Fields(header)
+		if len(fields) < 3 {
+			continue
+		}
+		size, err := strconv.Atoi(fields[2])
+		if err != nil {
+			break
+		}
+		data := make([]byte, size)
+		if _, err := io.ReadFull(reader, data); err != nil {
+			break
+		}
+		objects[fields[0]] = data
+		_, _ = reader.ReadByte()
+	}
+	return objects, nil
+}
+
+func (g *GitStore) gitOutput(ctx context.Context, stdin string, args ...string) ([]byte, error) {
+	runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	cmd := proc.CommandContext(runCtx, "git", append([]string{"-C", g.repo}, args...)...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return out, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(ee.Stderr)))
+		}
+		return out, fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+	}
+	return out, nil
 }
 
 func (g *GitStore) WriteResult(res *Result) error {
@@ -202,17 +274,28 @@ func (g *GitStore) ListResults(limit int) ([]Result, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	results := make([]Result, 0, limit)
+	shas := make([]string, 0, limit)
+	for _, p := range pairs {
+		if len(shas) >= limit {
+			break
+		}
+		shas = append(shas, p.sha)
+	}
+	objects, err := g.readObjects(shas)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]Result, 0, len(shas))
 	for _, p := range pairs {
 		if len(results) >= limit {
 			break
 		}
-		data, err := g.git(context.Background(), "", "cat-file", "-p", p.sha)
-		if err != nil {
+		data, ok := objects[p.sha]
+		if !ok {
 			continue
 		}
 		var res Result
-		if json.Unmarshal([]byte(data), &res) != nil {
+		if json.Unmarshal(data, &res) != nil {
 			continue
 		}
 		results = append(results, res)

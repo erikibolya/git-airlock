@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -57,7 +58,6 @@ func main() {
 	}
 
 	app := &App{startHidden: hasFlag("--tray") || hasFlag("--minimized"), paths: paths}
-	app.pendingNav.Store("")
 	app.lastRepo.Store("")
 	if hasFlag("--repos") || hasFlag("--setup") {
 		app.setupMode.Store(true)
@@ -147,13 +147,6 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			a.lastRepo.Store("/repo/" + rest[:i] + "/")
 		}
 	}
-	// Menu navigation reloads the current page; redirect the document request
-	// to the requested page before serving anything else.
-	if target, _ := a.pendingNav.Load().(string); target != "" && strings.Contains(r.Header.Get("Accept"), "text/html") {
-		a.pendingNav.Store("")
-		http.Redirect(w, r, target, http.StatusSeeOther)
-		return
-	}
 	// The dashboard links to /repositories; serve the native picker there.
 	if r.URL.Path == "/repositories" || r.URL.Path == "/setup" {
 		a.setupMode.Store(true)
@@ -179,12 +172,11 @@ func (a *App) startup(ctx context.Context) {
 	go a.watchResults()
 }
 
-// navigate reloads the webview and redirects the document request to path.
+// navigate moves the webview to a dashboard path without reloading the app.
 func (a *App) navigate(target string) {
-	a.pendingNav.Store(target)
 	a.setupMode.Store(target == "/repositories")
 	if a.ctx != nil {
-		wailsruntime.WindowReload(a.ctx)
+		wailsruntime.WindowExecJS(a.ctx, "window.location.assign("+strconv.Quote(target)+")")
 	}
 	a.showWindow()
 }

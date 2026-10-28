@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.3 — 2026-10-28
+
+- Dashboard pages read queue results with a single `git cat-file --batch`
+  process instead of one per result. On SMB/NFS mirrors this cuts page loads
+  from seconds to a fraction of a second.
+- The auto-refresh interval is 60 seconds instead of 15, so it no longer fights
+  with navigation.
+- Native-menu navigation uses `WindowExecJS` (a direct location change) instead
+  of a full window reload, which was slow with WebView2.
+
 ## 1.6.2 — 2026-10-28
 
 - A native application menu in the desktop window: File (Dashboard,
