@@ -1,0 +1,103 @@
+package update
+
+import (
+	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestCompare(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"1.6.3", "1.6.3", 0},
+		{"v1.7.0", "1.6.3", 1},
+		{"1.6.3", "1.7.0", -1},
+		{"1.10.0", "1.9.9", 1},
+		{"1.6", "1.6.0", 0},
+	}
+	for _, c := range cases {
+		if got := Compare(c.a, c.b); got != c.want {
+			t.Fatalf("Compare(%q,%q)=%d want %d", c.a, c.b, got, c.want)
+		}
+	}
+}
+
+func TestSignVerify(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sha := "abc123"
+	sig := Sign(priv, "v1.7.0", sha)
+	if err := Verify(pub, "1.7.0", sha, sig); err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(pub, "1.7.1", sha, sig); err == nil {
+		t.Fatal("accepted a signature for another version")
+	}
+	if err := Verify(pub, "1.7.0", "def456", sig); err == nil {
+		t.Fatal("accepted a signature for another hash")
+	}
+}
+
+func TestFetchAndDownload(t *testing.T) {
+	data := []byte("installer")
+	sum := sha256.Sum256(data)
+	hexsum := hex.EncodeToString(sum[:])
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/latest.json":
+			_ = json.NewEncoder(w).Encode(Manifest{
+				Version: "1.7.0",
+				Windows: Asset{URL: "http://" + r.Host + "/setup.exe", SHA256: hexsum, Signature: "sig"},
+			})
+		case "/setup.exe":
+			_, _ = w.Write(data)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	m, err := Fetch(context.Background(), srv.URL+"/latest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Version != "1.7.0" {
+		t.Fatalf("version = %q", m.Version)
+	}
+	path := filepath.Join(t.TempDir(), "setup.exe")
+	got, err := Download(context.Background(), m.Windows.URL, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != hexsum {
+		t.Fatalf("sha = %s want %s", got, hexsum)
+	}
+	if b, _ := os.ReadFile(path); string(b) != string(data) {
+		t.Fatal("downloaded content differs")
+	}
+}
+
+func TestParseKeys(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParsePublicKey(base64.StdEncoding.EncodeToString(pub)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParsePrivateKey(base64.StdEncoding.EncodeToString(priv.Seed())); err != nil {
+		t.Fatal(err)
+	}
+}

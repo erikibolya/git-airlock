@@ -31,7 +31,7 @@ function Resolve-Command([string]$name, [string[]]$candidates) {
 
 if (-not $Version) {
     $tag = (git -C $root describe --tags --abbrev=0 2>$null)
-    if ($tag) { $Version = $tag } else { $Version = "1.6.3" }
+    if ($tag) { $Version = $tag } else { $Version = "1.7.0" }
 }
 $Version = $Version.TrimStart("v")
 Write-Host "Building Git Airlock $Version" -ForegroundColor Cyan
@@ -43,7 +43,7 @@ if (-not $SkipDesktop) {
     }
     Push-Location (Join-Path $root "desktop")
     try {
-        & $wailsExe build -clean -platform windows/amd64
+        & $wailsExe build -clean -platform windows/amd64 -ldflags "-X main.version=$Version"
         if ($LASTEXITCODE -ne 0) { throw "wails build failed with exit code $LASTEXITCODE" }
     } finally {
         Pop-Location

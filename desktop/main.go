@@ -46,6 +46,13 @@ func main() {
 		notify("Git Airlock", "Native notifications are working.")
 		return
 	}
+	if hasFlag("--check-updates") {
+		if err := checkUpdatesCLI(); err != nil {
+			fmt.Fprintln(os.Stderr, "update check:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	argPaths := argValues("--config")
 	paths := argPaths
 	if len(paths) == 0 {
@@ -170,6 +177,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	go a.startTray()
 	go a.watchResults()
+	a.startUpdateCheck()
 }
 
 // navigate moves the webview to a dashboard path without reloading the app.
@@ -221,9 +229,9 @@ func (a *App) about() {
 			repos = append(repos, cfg.Repo)
 		}
 	}
-	msg := "Git Airlock\n\nhttps://github.com/erikibolya/git-airlock"
+	msg := "Git Airlock " + version + "\n\nhttps://github.com/erikibolya/git-airlock"
 	if len(repos) > 0 {
-		msg = "Git Airlock\n\nWatching: " + strings.Join(repos, ", ") + "\n\nhttps://github.com/erikibolya/git-airlock"
+		msg = "Git Airlock " + version + "\n\nWatching: " + strings.Join(repos, ", ") + "\n\nhttps://github.com/erikibolya/git-airlock"
 	}
 	_, _ = wailsruntime.MessageDialog(a.ctx, wailsruntime.MessageDialogOptions{
 		Type:    wailsruntime.InfoDialog,
@@ -248,6 +256,7 @@ func (a *App) menu() *menu.Menu {
 	view.AddText("Logs", nil, func(*menu.CallbackData) { a.navigateRepo("logs") })
 
 	help := m.AddSubmenu("Help")
+	help.AddText("Check for updates…", nil, func(*menu.CallbackData) { go a.checkUpdates(true) })
 	help.AddText("Git Airlock on GitHub", nil, func(*menu.CallbackData) {
 		if a.ctx != nil {
 			wailsruntime.BrowserOpenURL(a.ctx, "https://github.com/erikibolya/git-airlock")
