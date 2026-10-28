@@ -35,7 +35,8 @@ curl -fsS -H "Authorization: token ${TOKEN}" -H "Content-Type: application/json"
   -d '{"name":"repo","auto_init":true,"default_branch":"main","private":false}' \
   "${URL}/api/v1/user/repos" >/dev/null
 
-# Start the real Gitea Actions runner. Host mode keeps the test self-contained.
+# Start the real Gitea Actions runner. Job containers are scheduled on the dind
+# service (see runner-config.yaml), so the test covers container jobs too.
 RUNNER_TOKEN=$(curl -fsS -H "Authorization: token ${TOKEN}" \
   "${URL}/api/v1/admin/runners/registration-token" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 if [ -z "${RUNNER_TOKEN}" ]; then
