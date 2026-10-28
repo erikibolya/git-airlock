@@ -49,6 +49,24 @@ Prebuilt archives for Linux (amd64/arm64), macOS (amd64/arm64) and Windows
 (amd64) are on the [Releases](https://github.com/erikibolya/git-airlock/releases)
 page.
 
+Package managers:
+
+```bash
+# macOS / Linux
+brew tap erikibolya/git-airlock
+brew install git-airlock
+```
+
+```powershell
+# Windows (CLI; use the installer for the desktop app)
+scoop bucket add git-airlock https://github.com/erikibolya/scoop-git-airlock
+scoop install git-airlock/git-airlock
+```
+
+winget manifests for `ErikIbolya.GitAirlock` are generated from
+[`packaging/`](packaging) and submitted to
+[winget-pkgs](https://github.com/microsoft/winget-pkgs).
+
 Windows also has a one-click installer, `GitAirlockSetup-<version>.exe`. It
 installs the CLI, the desktop dashboard, a Start-menu and desktop shortcut, and
 an autostart entry that keeps the dashboard in the notification area. The

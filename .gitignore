@@ -18,3 +18,7 @@
 
 # Docker integration test workspace
 /test/integration/workspace/
+
+# Rendered packaging output and downloaded assets
+/packaging/out/
+/packaging/assets/

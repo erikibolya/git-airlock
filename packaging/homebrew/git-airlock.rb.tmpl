@@ -1,0 +1,39 @@
+class GitAirlock < Formula
+  desc "Push and merge pull requests across a network air gap"
+  homepage "https://github.com/erikibolya/git-airlock"
+  version "@@VERSION@@"
+  license "MIT"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/erikibolya/git-airlock/releases/download/v@@VERSION@@/airlock-darwin-arm64.tar.gz"
+      sha256 "@@SHA_DARWIN_ARM64@@"
+    else
+      url "https://github.com/erikibolya/git-airlock/releases/download/v@@VERSION@@/airlock-darwin-amd64.tar.gz"
+      sha256 "@@SHA_DARWIN_AMD64@@"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "https://github.com/erikibolya/git-airlock/releases/download/v@@VERSION@@/airlock-linux-arm64.tar.gz"
+      sha256 "@@SHA_LINUX_ARM64@@"
+    else
+      url "https://github.com/erikibolya/git-airlock/releases/download/v@@VERSION@@/airlock-linux-amd64.tar.gz"
+      sha256 "@@SHA_LINUX_AMD64@@"
+    end
+  end
+
+  def install
+    target = if OS.mac?
+               Hardware::CPU.arm? ? "airlock-darwin-arm64" : "airlock-darwin-amd64"
+             else
+               Hardware::CPU.arm? ? "airlock-linux-arm64" : "airlock-linux-amd64"
+             end
+    bin.install target => "airlock"
+  end
+
+  test do
+    assert_match "git-airlock", shell_output("#{bin}/airlock version")
+  end
+end

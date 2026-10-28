@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.0 — 2026-10-28
+
+- Packaging: Homebrew formula (tap `erikibolya/homebrew-git-airlock`), Scoop
+  manifest (bucket `erikibolya/scoop-git-airlock`) and winget manifests for
+  `ErikIbolya.GitAirlock`, rendered from release assets by
+  `packaging/render.py`.
+- The integration test now runs workflow jobs in Docker containers: a
+  `docker:27-dind` service, a shared workspace volume and act_runner with
+  `container.docker_host`. The job executes `node --version` in the
+  `node:20-bookworm` container before the merge.
+- `.gitattributes` keeps shell scripts and manifests LF on Windows checkouts.
+
 ## 1.5.0 — 2026-10-28
 
 - Sync over SSH: `mirror_remote` and `remote_url` let a worker with no shared

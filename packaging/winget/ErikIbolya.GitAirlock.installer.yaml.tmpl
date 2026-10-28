@@ -1,0 +1,23 @@
+PackageIdentifier: ErikIbolya.GitAirlock
+PackageVersion: @@VERSION@@
+InstallerType: inno
+Scope: user
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+InstallerSwitches:
+  Silent: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+  SilentWithProgress: /SILENT /SUPPRESSMSGBOXES /NORESTART
+UpgradeBehavior: install
+AppsAndFeaturesEntries:
+  - DisplayName: Git Airlock
+    Publisher: Erik Ibolya
+    DisplayVersion: @@VERSION@@
+    ProductCode: "{A3F1B6C2-9D4E-4B7A-8C15-6E2D9F0A1B34}_is1"
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/erikibolya/git-airlock/releases/download/v@@VERSION@@/GitAirlockSetup-@@VERSION@@.exe
+    InstallerSha256: @@SHA_INSTALLER@@
+ManifestType: installer
+ManifestVersion: 1.6.0
