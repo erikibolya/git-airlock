@@ -23,6 +23,9 @@
   PR for every branch pushed to the mirror and merge it when checks are green.
   No explicit `airlock pr open` is needed; existing open PRs and closed/merged
   ones are left alone.
+- **v0.8.1** — status-first dashboard: an overview with the worker state, the
+  watched repository, in-progress checks and recent activity; manual request
+  forms moved to their own page.
 
 ## Next
 
