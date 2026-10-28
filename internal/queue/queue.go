@@ -21,6 +21,7 @@ const (
 	ActionOpen   = "open"
 	ActionStatus = "status"
 	ActionMerge  = "merge"
+	ActionSync   = "sync"
 	ActionBroken = "__broken__"
 )
 

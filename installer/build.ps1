@@ -31,7 +31,7 @@ function Resolve-Command([string]$name, [string[]]$candidates) {
 
 if (-not $Version) {
     $tag = (git -C $root describe --tags --abbrev=0 2>$null)
-    if ($tag) { $Version = $tag } else { $Version = "1.2.0" }
+    if ($tag) { $Version = $tag } else { $Version = "1.3.0" }
 }
 $Version = $Version.TrimStart("v")
 Write-Host "Building Git Airlock $Version" -ForegroundColor Cyan

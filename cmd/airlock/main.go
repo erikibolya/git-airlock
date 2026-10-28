@@ -24,6 +24,7 @@ import (
 	"github.com/erikibolya/git-airlock/internal/config"
 	"github.com/erikibolya/git-airlock/internal/gitutil"
 	"github.com/erikibolya/git-airlock/internal/install"
+	"github.com/erikibolya/git-airlock/internal/mcp"
 	"github.com/erikibolya/git-airlock/internal/proc"
 	"github.com/erikibolya/git-airlock/internal/provider"
 	"github.com/erikibolya/git-airlock/internal/provider/gitea"
@@ -88,6 +89,8 @@ func run(ctx context.Context, args []string) error {
 		return cmdUI(ctx, args[1:])
 	case "doctor":
 		return cmdDoctor(ctx, args[1:])
+	case "mcp":
+		return cmdMCP(ctx, args[1:])
 	case "install-task":
 		return cmdInstallTask(args[1:])
 	case "instructions":
@@ -134,6 +137,7 @@ Usage:
   airlock ui        [--config PATH]... [--listen 127.0.0.1:8787]
                     [--token TOKEN] [--open]
   airlock doctor    [--config PATH]
+  airlock mcp       [--config PATH]
   airlock install-task [--config PATH] [--name "Git Airlock"]
                        [--interval 1m] [--print]
   airlock instructions
@@ -773,13 +777,50 @@ func renderStatus(cfg *config.Config, q queue.Store) error {
 		} else if r.Pending {
 			status = "pending"
 		}
-		fmt.Printf("  %-24s %-7s %-8s #%-4d %s\n", r.ID, r.Action, status, r.PR, r.Message)
+		number := "     "
+		if r.PR > 0 {
+			number = fmt.Sprintf("#%-4d", r.PR)
+		}
+		fmt.Printf("  %-24s %-7s %-8s %s %s\n", r.ID, r.Action, status, number, r.Message)
 	}
 	logs, _ := q.TailLog(8)
 	if logs != "" {
 		fmt.Printf("\nLast log lines\n%s", logs)
 	}
 	return nil
+}
+
+// ---------- mcp ----------
+
+func cmdMCP(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	configPath := fs.String("config", "", "config path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, _, err := loadConfig(*configPath)
+	if err != nil {
+		return err
+	}
+	q, err := queue.Open(cfg.Queue, cfg.Mirror, cfg.QueueRemote)
+	if err != nil {
+		return err
+	}
+	if err := q.Ensure(); err != nil {
+		return err
+	}
+	srv := &mcp.Server{
+		Cfg:     cfg,
+		Q:       q,
+		Version: versionString(),
+		In:      os.Stdin,
+		Out:     os.Stdout,
+		Log: func(format string, args ...any) {
+			fmt.Fprintf(os.Stderr, format+"\n", args...)
+		},
+	}
+	return srv.Run(ctx)
 }
 
 // ---------- ui ----------

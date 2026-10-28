@@ -354,6 +354,8 @@ func requestLabel(req queue.Request) string {
 		return fmt.Sprintf("Check PR #%d", req.Number)
 	case queue.ActionMerge:
 		return fmt.Sprintf("Merge PR #%d", req.Number)
+	case queue.ActionSync:
+		return "Sync mirror"
 	default:
 		return req.Action
 	}
@@ -367,6 +369,8 @@ func resultLabel(res queue.Result) string {
 		return fmt.Sprintf("Check PR #%d", res.PR)
 	case queue.ActionMerge:
 		return fmt.Sprintf("Merge PR #%d", res.PR)
+	case queue.ActionSync:
+		return "Sync mirror"
 	default:
 		return res.Action
 	}
