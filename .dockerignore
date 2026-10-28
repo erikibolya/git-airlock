@@ -1,0 +1,6 @@
+.git
+desktop/build
+desktop/frontend/wailsjs
+installer/dist
+installer/files/*.exe
+test/integration/work

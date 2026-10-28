@@ -14,18 +14,18 @@ import (
 // menu entry and tooltip on the latest event.
 func (a *App) watchResults() {
 	seen := map[string]string{}
-	a.pollResults(seen)
+	a.pollResults(seen, true)
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
 		if a.quitting.Load() {
 			return
 		}
-		a.pollResults(seen)
+		a.pollResults(seen, false)
 	}
 }
 
-func (a *App) pollResults(seen map[string]string) {
+func (a *App) pollResults(seen map[string]string, initial bool) {
 	box := a.current.Load()
 	if box == nil {
 		return
@@ -56,6 +56,12 @@ func (a *App) pollResults(seen map[string]string) {
 			a.statusItem.SetTitle(cfg.Repo + ": " + statusLabel(res))
 		}
 		systray.SetTooltip(truncate("Git Airlock: "+body, 120))
+		if initial {
+			continue
+		}
+		if res.Merged || !res.OK {
+			go notify("Git Airlock · "+cfg.Repo, body)
+		}
 	}
 }
 

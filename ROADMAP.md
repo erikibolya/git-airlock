@@ -41,6 +41,10 @@
   `--delete-branch`, dashboard checkboxes).
 - **v1.3** — `airlock mcp`: a stdio MCP server exposing status, sync,
   pr open/status/merge as structured tools for agents.
+- **v1.4** — native notifications for merged/failed requests (Windows toast
+  with an AppUserModelID, Linux `notify-send`, macOS Notification Center) and a
+  Docker/Gitea integration test covering the full queue → sync → PR → checks →
+  squash merge → branch cleanup path.
 
 ## Next
 
@@ -52,9 +56,9 @@ needs a local path/clone. Add a managed mirror cache so the whole flow can use
 
 ### Notifications
 
-The tray menu and tooltip show the latest result. Native desktop toasts are not
-shipped yet; Windows needs a registered AppUserModelID/shortcut for unpackaged
-apps, which should be added together with the installer shortcut.
+Toasts are shipped for merged/failed requests. Windows "Do Not Disturb" hides
+the banner (the notification still lands in the action center); a future
+improvement could add per-event filtering or an "urgent" toast.
 
 ### Labels and review automation
 
@@ -67,7 +71,8 @@ The Windows installer covers the direct-download case (CLI, desktop app,
 autostart, worker task). Homebrew, Scoop/winget and Linux packages are still
 missing.
 
-### Integration tests
+### Gitea Actions integration
 
-Docker Compose with Gitea + act_runner + two airlock peers (isolated client and
-worker) to exercise the full PR/check/merge path in CI.
+The Docker test simulates CI with commit statuses. Adding a real `act_runner`
+would also exercise the workflow runner and Gitea Actions-specific status
+contexts.

@@ -234,7 +234,12 @@ server to keep running. It reads the same configs and queues as the CLI, adds a
 notification-area icon with **Open dashboard**, **Repositories…**, **Sync now**
 and **Quit**, and hides to the tray when you close the window. The tray menu
 also shows the latest worker result (click it to open the dashboard) and the
-tooltip follows it; it refreshes every 30 seconds. It never holds
+tooltip follows it; it refreshes every 30 seconds. Merged or failed requests
+raise a native notification: a Windows toast (the installer registers the
+AppUserModelID on the Start-menu shortcut), `notify-send` on Linux, or the
+Notification Center on macOS. Use `airlock-desktop.exe --notify-test` to check
+the setup. Windows "Do Not Disturb" hides the banner but keeps it in the
+notification center. It never holds
 the API token; the scheduled worker still performs the sync and the API calls.
 
 ```powershell
@@ -446,6 +451,14 @@ go build ./...
 
 The tests cover both queue transports, fast-forward sync (including divergence),
 all three provider adapters, and the worker's pending/merge state machine.
+
+The end-to-end test in [`test/integration`](test/integration) starts Gitea in
+Docker, pushes from the isolated side, runs the real worker, simulates CI with a
+commit status and checks the squash merge plus branch cleanup:
+
+```bash
+bash test/integration/run.sh
+```
 
 ## License
 

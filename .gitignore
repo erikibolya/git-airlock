@@ -15,3 +15,6 @@
 /installer/files/airlock.toml
 /installer/files/README.md
 /installer/files/LICENSE
+
+# Docker integration test workspace
+/test/integration/work/

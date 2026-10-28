@@ -1,6 +1,6 @@
 #define AppName "Git Airlock"
 #ifndef AppVersion
-  #define AppVersion "1.3.0"
+  #define AppVersion "1.4.0"
 #endif
 #define AppPublisher "Erik Ibolya"
 #define AppExe "airlock-desktop.exe"
@@ -48,11 +48,11 @@ Source: "files\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "files\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Git Airlock"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Comment: "Git Airlock dashboard"
-Name: "{autodesktop}\Git Airlock"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"
+Name: "{group}\Git Airlock"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Comment: "Git Airlock dashboard"; AppUserModelID: "Git Airlock"
+Name: "{autodesktop}\Git Airlock"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; AppUserModelID: "Git Airlock"
 ; Starts in the notification area after sign-in. The single-instance lock brings
 ; an already running window to the front when the Start menu shortcut is used.
-Name: "{userstartup}\Git Airlock"; Filename: "{app}\{#AppExe}"; Parameters: "--tray"; WorkingDir: "{app}"
+Name: "{userstartup}\Git Airlock"; Filename: "{app}\{#AppExe}"; Parameters: "--tray"; WorkingDir: "{app}"; AppUserModelID: "Git Airlock"
 
 [Run]
 Filename: "{app}\airlock.exe"; Parameters: "install-task --config ""{app}\.airlock.toml"" --name ""Git Airlock"" --interval 1m"; Flags: runhidden waituntilterminated; StatusMsg: "Installing the background worker task..."

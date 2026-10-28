@@ -38,6 +38,10 @@ type dashBox struct {
 }
 
 func main() {
+	if hasFlag("--notify-test") {
+		notify("Git Airlock", "Native notifications are working.")
+		return
+	}
 	argPaths := argValues("--config")
 	paths := argPaths
 	if len(paths) == 0 {
