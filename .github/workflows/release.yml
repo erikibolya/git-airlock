@@ -54,11 +54,7 @@ jobs:
           go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "dist/${bin}" ./cmd/airlock
           cp README.md LICENSE dist/
           if [ "$GOOS" = "windows" ]; then
-            GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
-              go build -trimpath -ldflags "-s -w -H windowsgui -X main.version=${VERSION}" \
-              -o "dist/airlock-desktop.exe" ./cmd/airlock-desktop
-            (cd dist && zip -q -r "${name}.zip" "${bin}" airlock-desktop.exe README.md LICENSE)
-            (cd dist && zip -q -r "airlock-desktop-windows-amd64.zip" airlock-desktop.exe README.md LICENSE)
+            (cd dist && zip -q -r "${name}.zip" "${bin}" README.md LICENSE)
           else
             mv "dist/${bin}" "dist/${name}"
             tar -C dist -czf "dist/${name}.tar.gz" "${name}" README.md LICENSE
@@ -70,8 +66,36 @@ jobs:
             dist/*.zip
             dist/*.tar.gz
 
+  # The Wails desktop app needs a Windows toolchain for the icon/manifest that
+  # `wails build` generates. The installer reuses that binary.
+  desktop:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
+      - name: Build desktop app
+        working-directory: desktop
+        run: wails build -clean -platform windows/amd64
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+        shell: pwsh
+      - name: Build installer
+        shell: pwsh
+        run: ./installer/build.ps1 -SkipDesktop -Version ${{ github.ref_name }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: airlock-desktop-windows
+          path: |
+            desktop/build/bin/airlock-desktop.exe
+            installer/dist/*.exe
+
   release:
-    needs: build
+    needs: [build, desktop]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -85,5 +109,7 @@ jobs:
           files: |
             dist/*.zip
             dist/*.tar.gz
+            dist/airlock-desktop.exe
+            dist/GitAirlockSetup-*.exe
             dist/checksums.txt
           generate_release_notes: true
