@@ -43,8 +43,12 @@ go install github.com/erikibolya/git-airlock/cmd/airlock@latest
 
 Prebuilt archives for Linux (amd64/arm64), macOS (amd64/arm64) and Windows
 (amd64) are on the [Releases](https://github.com/erikibolya/git-airlock/releases)
-page. The Windows zip includes both `airlock.exe` and the native
-`airlock-desktop.exe`.
+page.
+
+Windows also has a one-click installer, `GitAirlockSetup-<version>.exe`. It
+installs the CLI, the desktop dashboard, a Start-menu and desktop shortcut, and
+an autostart entry that keeps the dashboard in the notification area. The
+scheduled worker task is created during setup.
 
 Or build from source:
 
@@ -168,20 +172,43 @@ an HttpOnly cookie. Use this only on a network you trust — the dashboard can
 enqueue merges, though the worker still waits for green checks. `--open` launches
 the browser.
 
-### Native Windows app
+### Desktop app
 
-`airlock-desktop.exe` is a native Win32 dashboard (no browser) built from this
-repository. It reads the same config and queue as the CLI and shows pending
-requests, results and logs; its buttons enqueue the same requests.
+`airlock-desktop.exe` is a native window around the same dashboard (WebView2 on
+Windows, WebKitGTK on Linux, WKWebView on macOS): no browser tab, no local
+server to keep running. It reads the same config and queue as the CLI, adds a
+notification-area icon with **Open dashboard**, **Sync now** and **Quit**, and
+hides to the tray when you close the window. It never holds the API token; the
+scheduled worker still performs the sync and the API calls.
 
 ```powershell
 airlock-desktop.exe --config Z:\repos\Acme\Au.Net\.airlock.windows.toml
 ```
 
-The config path is remembered after the first launch, so a shortcut can start it
-without arguments. The scheduled worker still performs the sync and the API
-calls; the desktop app never holds the API token. It is Windows-only; the web
-dashboard covers Linux/macOS.
+The path is remembered after the first launch. Without `--config` the app looks
+for `.airlock.toml` in its working directory, so the installer drops the config
+next to the executable and the shortcuts need no arguments. If no valid config
+is found, a setup screen lets you browse to one; it is applied without a restart.
+
+The desktop app is a separate Go module in [`desktop/`](desktop), built with
+[Wails](https://wails.io) and Go 1.25+. The installer sources live in
+[`installer/`](installer):
+
+```powershell
+# one-time
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+winget install -e --id JRSoftware.InnoSetup
+
+# build the app, CLI and installer into installer/dist
+pwsh -File installer/build.ps1
+
+# use this machine's config as the default instead of the example template
+pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Au.Net\.airlock.windows.toml
+```
+
+On Linux, install `libgtk-3-dev libwebkit2gtk-4.1-dev` and run `wails build` in
+`desktop/`. Release builds are produced on Windows so the executable gets its
+icon and manifest.
 
 ## Configuration
 
@@ -302,8 +329,9 @@ system.
 - No PR review automation, labels, or release automation (beyond GitHub
   releases of Airlock itself).
 - The web dashboard is loopback-first; LAN exposure requires an access token.
-  The native desktop app is Windows-only; other platforms use `airlock ui`.
-  The CLI and the queue remain the source of truth; the UIs are conveniences.
+  The desktop app is shipped as a Windows installer; Linux/macOS builds work but
+  are not packaged. The CLI and the queue remain the source of truth; the UIs
+  are conveniences.
 
 ## Development
 
@@ -311,6 +339,14 @@ system.
 go vet ./...
 go test ./...
 go build ./cmd/airlock
+```
+
+The desktop app is its own module:
+
+```bash
+cd desktop
+go vet ./...
+go build ./...
 ```
 
 The tests cover both queue transports, fast-forward sync (including divergence),

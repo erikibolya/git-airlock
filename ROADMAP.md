@@ -14,6 +14,11 @@
   shared queue folder required.
 - **v0.6.3** — hide console windows for Git children spawned by the Windows GUI
   (no flashing `cmd` windows, no focus stealing).
+- **v0.7** — cross-platform desktop app (Wails: WebView2 / WebKitGTK / WKWebView)
+  with a notification-area icon, close-to-tray, single-instance activation and a
+  Sync-now action. A Windows installer sets up the CLI, the desktop app, the
+  autostart entry and the worker task in one go. The old Win32 dashboard is
+  replaced.
 
 ## Next
 
@@ -24,13 +29,6 @@
 worker model stays unchanged, but agents get structured input/output instead of
 shell quoting. The current interface is the CLI plus the `AGENTS.md` snippet;
 the MCP server is not implemented yet.
-
-### Cross-platform desktop
-
-The native Win32 dashboard is Windows-only. A Wails wrapper around the existing
-web dashboard (WebView2 on Windows, WebKitGTK on Linux) would give one GUI
-codebase for Windows/Linux/macOS. Fyne is an alternative with a different
-widget set. The `airlock ui` web dashboard already works everywhere.
 
 ### Sync over SSH
 
@@ -46,8 +44,9 @@ selector.
 
 ### Notifications
 
-Desktop tray icon with a balloon/toast when a request finishes (merged, failed,
-checks pending) and a tray menu for Sync / Open dashboard.
+The tray icon is in place, but it does not raise a toast yet. Add a Windows
+notification and a Linux `libnotify` message when a request finishes (merged,
+failed, checks pending).
 
 ### Merge strategies
 

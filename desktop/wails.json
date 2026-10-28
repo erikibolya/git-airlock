@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "git-airlock",
+  "outputfilename": "airlock-desktop",
+  "frontend:install": "echo no frontend",
+  "frontend:build": "echo no frontend",
+  "frontend:dev:watcher": "echo no frontend",
+  "frontend:dev:serverUrl": "",
+  "author": {
+    "name": "Erik Ibolya",
+    "email": "erikibolya@gmail.com"
+  }
+}

@@ -1,0 +1,36 @@
+# Git Airlock configuration
+#
+# Copy this file to .airlock.toml (or run `airlock init`) and edit the values.
+# The desktop app looks for .airlock.toml in its working directory and remembers
+# any other path you pick in its setup screen.
+
+# Hosting repository path: owner/name.
+repo = "owner/name"
+
+# Private git remote that only the workstation (VPN side) can reach.
+remote = "company"
+
+# Bare mirror used as the push target for the isolated machine. The app creates
+# nothing here: run `airlock init` or point this at an existing mirror.
+mirror = "C:/Users/you/.airlock/owner-name.git"
+
+# "git" keeps the queue in refs/airlock/* inside the mirror; a path uses files.
+queue = "git"
+
+# Optional: exchange queue refs with this remote instead of the local mirror.
+# queue_remote = "ssh://airlock@holly/mnt/user/Development/repos/.mirrors/repo.git"
+
+# gitea, github or gitlab.
+provider = "gitea"
+
+# REST API base URL (Gitea only; GitHub and GitLab have sensible defaults).
+api = "https://gitea.example.com/api/v1"
+
+# Optional PEM bundle for a private or self-signed certificate.
+# ca = "C:/certs/gitea.crt"
+
+# Default pull-request target branch.
+base = "main"
+
+# Default merge policy: never, when-green or now.
+merge = "when-green"

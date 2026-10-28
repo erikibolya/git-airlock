@@ -3,3 +3,15 @@
 /dist/
 *.test
 .DS_Store
+
+# Desktop (Wails) build output
+/desktop/build/bin/
+/desktop/build/windows/
+/installer/dist/
+
+# Installer payload assembled by installer/build.ps1
+/installer/files/airlock.exe
+/installer/files/airlock-desktop.exe
+/installer/files/airlock.toml
+/installer/files/README.md
+/installer/files/LICENSE
