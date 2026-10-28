@@ -1,0 +1,42 @@
+{{define "content"}}
+<section class="status status-{{.Status}}">
+  <div class="status-main">
+    <span class="dot"></span>
+    <div>
+      <h2>{{.StatusTitle}}</h2>
+      <p class="muted">{{.StatusSub}}</p>
+    </div>
+  </div>
+  <div class="stats">
+    <div><strong>{{.RepoCount}}</strong><span>repositories</span></div>
+    <div><strong>{{.ActiveCount}}</strong><span>active</span></div>
+    <div><strong>{{.WaitingCount}}</strong><span>waiting</span></div>
+  </div>
+  {{if .ActiveCount}}<div class="progress"><span></span></div>{{end}}
+</section>
+
+{{if .Repos}}
+<table class="repos">
+  <thead>
+    <tr><th>repository</th><th>state</th><th>pending</th><th>last activity</th><th>auto PR</th><th>base</th></tr>
+  </thead>
+  <tbody>
+  {{range .Repos}}
+    <tr>
+      <td>
+        <a href="{{.Link}}"><strong>{{.Repo}}</strong></a>
+        <div class="muted small">{{.Provider}}{{if .Error}} · <span class="err">{{.Error}}</span>{{end}}</div>
+      </td>
+      <td><span class="badge {{.Status}}">{{.StatusTitle}}</span></td>
+      <td>{{.Pending}}</td>
+      <td class="muted">{{if .LastActivity}}{{.LastActivity}}{{else}}never{{end}}{{if .LastCheck}}<div class="small">last check: {{.LastCheck}}</div>{{end}}</td>
+      <td>{{if .AutoPR}}<span class="badge ok">on</span>{{else}}<span class="muted">off</span>{{end}}</td>
+      <td><code>{{.Base}}</code></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="muted">No repositories configured.</p>
+{{end}}
+{{end}}

@@ -37,6 +37,8 @@ func TestDashboardAndEnqueue(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), "owner/name") {
 		t.Fatal("dashboard does not show the repo")
 	}
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 	if !strings.Contains(rr.Body.String(), "Recent activity") {
 		t.Fatal("overview does not show activity")
 	}
@@ -134,5 +136,46 @@ func TestCSRF(t *testing.T) {
 	s.Handler().ServeHTTP(rr, req)
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("bad csrf = %d", rr.Code)
+	}
+}
+
+func TestDashboardListsRepos(t *testing.T) {
+	cfgA := testConfig(t)
+	cfgA.Repo = "owner/one"
+	cfgB := testConfig(t)
+	cfgB.Repo = "owner/two"
+	cfgB.Base = "master"
+
+	d, err := NewDashboard([]*config.Config{cfgA, cfgB}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := d.Handler()
+
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET / = %d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, want := range []string{"owner/one", "owner/two", "repositories"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("repo list missing %q", want)
+		}
+	}
+
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/repo/owner-one/", nil))
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Recent activity") {
+		t.Fatalf("detail page = %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "all repositories") {
+		t.Fatal("detail page has no link back to the list")
+	}
+
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/repo/owner-one/manual", nil))
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "/repo/owner-one/pr/open") {
+		t.Fatalf("manual page = %d", rr.Code)
 	}
 }

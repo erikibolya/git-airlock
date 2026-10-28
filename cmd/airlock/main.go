@@ -129,7 +129,7 @@ Usage:
   airlock pr merge  <number> [--when-green] [--wait 2m|--no-wait] [--config PATH]
   airlock worker    [--config PATH]... [--no-sync] [--loop 1m]
   airlock status    [--config PATH] [--watch] [--json]
-  airlock ui        [--config PATH] [--listen 127.0.0.1:8787]
+  airlock ui        [--config PATH]... [--listen 127.0.0.1:8787]
                     [--token TOKEN] [--open]
   airlock doctor    [--config PATH]
   airlock install-task [--config PATH] [--name "Git Airlock"]
@@ -717,7 +717,8 @@ func cmdStatus(ctx context.Context, args []string) error {
 func cmdUI(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("ui", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	configPath := fs.String("config", "", "config path")
+	var configs stringList
+	fs.Var(&configs, "config", "config path (repeatable)")
 	listen := fs.String("listen", "127.0.0.1:8787", "listen address (host:port)")
 	token := fs.String("token", "", "access token; required for non-loopback binds")
 	openFlag := fs.Bool("open", false, "open the dashboard in a browser")
@@ -725,9 +726,21 @@ func cmdUI(ctx context.Context, args []string) error {
 		return err
 	}
 
-	cfg, _, err := loadConfig(*configPath)
-	if err != nil {
-		return err
+	paths := []string(configs)
+	if len(paths) == 0 {
+		p, err := config.Resolve("")
+		if err != nil {
+			return err
+		}
+		paths = []string{p}
+	}
+	var cfgs []*config.Config
+	for _, p := range paths {
+		cfg, err := config.Load(p)
+		if err != nil {
+			return err
+		}
+		cfgs = append(cfgs, cfg)
 	}
 	host, port, err := net.SplitHostPort(*listen)
 	if err != nil {
@@ -742,7 +755,7 @@ func cmdUI(ctx context.Context, args []string) error {
 		fmt.Printf("access token: %s\n", *token)
 	}
 
-	srv, err := ui.New(cfg, *token)
+	srv, err := ui.NewDashboard(cfgs, *token)
 	if err != nil {
 		return err
 	}

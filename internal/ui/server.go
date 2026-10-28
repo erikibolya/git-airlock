@@ -28,7 +28,7 @@ var templateFS embed.FS
 var pages = map[string]*template.Template{}
 
 func init() {
-	for _, name := range []string{"overview", "manual", "result", "logs"} {
+	for _, name := range []string{"repos", "overview", "manual", "result", "logs"} {
 		pages[name] = template.Must(template.ParseFS(templateFS, "templates/layout.html", "templates/"+name+".html"))
 	}
 }
@@ -36,10 +36,12 @@ func init() {
 // Server is the dashboard. It only reads the queue and enqueues requests; the
 // worker remains the only component that talks to the git host.
 type Server struct {
-	cfg   *config.Config
-	store queue.Store
-	csrf  string
-	token string
+	cfg      *config.Config
+	store    queue.Store
+	csrf     string
+	token    string
+	basePath string
+	authMode string
 }
 
 // New builds a dashboard. An empty token disables authentication (meant for
@@ -67,38 +69,31 @@ func NewAccessToken() string {
 // Handler returns the HTTP handler.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.auth(s.handleOverview))
-	mux.HandleFunc("/manual", s.auth(s.handleManual))
-	mux.HandleFunc("/pr/open", s.auth(s.handleOpen))
-	mux.HandleFunc("/pr/status", s.auth(s.handleStatus))
-	mux.HandleFunc("/pr/merge", s.auth(s.handleMerge))
-	mux.HandleFunc("/sync", s.auth(s.handleSync))
-	mux.HandleFunc("/result/", s.auth(s.handleResult))
-	mux.HandleFunc("/logs", s.auth(s.handleLogs))
+	mux.HandleFunc("/", s.handleOverview)
+	mux.HandleFunc("/manual", s.handleManual)
+	mux.HandleFunc("/pr/open", s.handleOpen)
+	mux.HandleFunc("/pr/status", s.handleStatus)
+	mux.HandleFunc("/pr/merge", s.handleMerge)
+	mux.HandleFunc("/sync", s.handleSync)
+	mux.HandleFunc("/result/", s.handleResult)
+	mux.HandleFunc("/logs", s.handleLogs)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	return s.headers(mux)
+	return headers(auth(s.token, mux))
 }
 
-func (s *Server) headers(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
-	if s.token == "" {
+// auth requires the dashboard token when one is configured. An empty token
+// leaves the handler open (loopback and the embedded desktop window).
+func auth(token string, next http.Handler) http.Handler {
+	if token == "" {
 		return next
 	}
-	return func(w http.ResponseWriter, r *http.Request) {
-		if t := r.URL.Query().Get("token"); t != "" && tokenEqual(t, s.token) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if t := r.URL.Query().Get("token"); t != "" && tokenEqual(t, token) {
 			http.SetCookie(w, &http.Cookie{
 				Name:     "airlock_token",
-				Value:    s.token,
+				Value:    token,
 				Path:     "/",
 				HttpOnly: true,
 				SameSite: http.SameSiteStrictMode,
@@ -110,12 +105,21 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		c, err := r.Cookie("airlock_token")
-		if err != nil || !tokenEqual(c.Value, s.token) {
+		if err != nil || !tokenEqual(c.Value, token) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		next(w, r)
-	}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func headers(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 type pageData struct {
@@ -129,11 +133,47 @@ type pageData struct {
 	Result     *queue.Result
 	ResultJSON string
 	Logs       string
-	QueueMode  string
-	AuthMode   string
-	Now        time.Time
+	QueueMode   string
+	AuthMode    string
+	Now         time.Time
+	BasePath    string
+	AutoRefresh bool
 
 	// Overview page.
+	PendingItems []pendingItem
+	Activity     []activityItem
+	Active       bool
+	Waiting      bool
+	Status       string
+	StatusTitle  string
+	StatusSub    string
+	LastActivity string
+	LastCheck    string
+
+	// Repository list.
+	Repos         []repoView
+	RepoCount     int
+	RepoCountText string
+	ActiveCount   int
+	WaitingCount  int
+}
+
+type repoView struct {
+	Link         string
+	Repo         string
+	Provider     string
+	Base         string
+	AutoPR       bool
+	Merge        string
+	Pending      int
+	Status       string
+	StatusTitle  string
+	LastActivity string
+	LastCheck    string
+	Error        string
+}
+
+type repoSummary struct {
 	PendingItems []pendingItem
 	Activity     []activityItem
 	Active       bool
@@ -169,11 +209,14 @@ func (s *Server) baseData(title string) pageData {
 	if s.cfg.Queue == "git" {
 		mode = "git refs"
 	}
-	auth := "localhost only"
-	if s.token != "" {
-		auth = "token protected"
+	authMode := s.authMode
+	if authMode == "" {
+		authMode = "localhost only"
+		if s.token != "" {
+			authMode = "token protected"
+		}
 	}
-	return pageData{Title: title, Config: s.cfg, CSRF: s.csrf, QueueMode: mode, AuthMode: auth, Now: time.Now()}
+	return pageData{Title: title, Config: s.cfg, CSRF: s.csrf, QueueMode: mode, AuthMode: authMode, BasePath: s.basePath, Now: time.Now()}
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
@@ -186,26 +229,44 @@ func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-// handleOverview is the default page: what is watched, what the worker is
-// doing, and the latest results. Manual tools live on /manual.
+// handleOverview is the repository detail page: what is watched, what the
+// worker is doing, and the latest results.
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
-	pending, err := s.store.Pending()
+	sum, err := s.summary()
+	data := s.baseData("Overview")
+	data.AutoRefresh = true
+	data.Flash = r.URL.Query().Get("flash")
 	if err != nil {
-		data := s.baseData("Overview")
 		data.Error = err.Error()
 		s.render(w, "overview", data)
 		return
 	}
+	data.PendingItems = sum.PendingItems
+	data.Activity = sum.Activity
+	data.Active = sum.Active
+	data.Waiting = sum.Waiting
+	data.Status = sum.Status
+	data.StatusTitle = sum.StatusTitle
+	data.StatusSub = sum.StatusSub
+	data.LastActivity = sum.LastActivity
+	data.LastCheck = sum.LastCheck
+	s.render(w, "overview", data)
+}
+
+// summary reads the queue once and derives the state shown on both the
+// repository list and the detail page.
+func (s *Server) summary() (repoSummary, error) {
+	var sum repoSummary
+	pending, err := s.store.Pending()
+	if err != nil {
+		return sum, err
+	}
 	results, _ := s.store.ListResults(25)
-	data := s.baseData("Overview")
-	data.Flash = r.URL.Query().Get("flash")
-	data.Pending = pending
-	data.Results = results
-	data.Active = len(pending) > 0
+	sum.Active = len(pending) > 0
 
 	for _, req := range pending {
 		item := pendingItem{
@@ -221,13 +282,13 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 			item.Pending = res.Pending
 		}
 		if item.Pending || item.Checks == "pending" {
-			data.Waiting = true
+			sum.Waiting = true
 		}
-		data.PendingItems = append(data.PendingItems, item)
+		sum.PendingItems = append(sum.PendingItems, item)
 	}
 
 	for _, res := range results {
-		data.Activity = append(data.Activity, activityItem{
+		sum.Activity = append(sum.Activity, activityItem{
 			At:      ageText(idTime(res.ID)),
 			Label:   resultLabel(res),
 			Message: res.Message,
@@ -235,37 +296,37 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 			Checks:  res.Checks,
 			URL:     res.URL,
 		})
-		if data.LastCheck == "" && res.Checks != "" && res.Checks != "none" {
+		if sum.LastCheck == "" && res.Checks != "" && res.Checks != "none" {
 			if res.PR > 0 {
-				data.LastCheck = fmt.Sprintf("PR #%d, checks %s, %s", res.PR, res.Checks, ageText(idTime(res.ID)))
+				sum.LastCheck = fmt.Sprintf("PR #%d, checks %s, %s", res.PR, res.Checks, ageText(idTime(res.ID)))
 			} else {
-				data.LastCheck = fmt.Sprintf("checks %s, %s", res.Checks, ageText(idTime(res.ID)))
+				sum.LastCheck = fmt.Sprintf("checks %s, %s", res.Checks, ageText(idTime(res.ID)))
 			}
 		}
 	}
 	if len(results) > 0 {
-		data.LastActivity = ageText(idTime(results[0].ID))
+		sum.LastActivity = ageText(idTime(results[0].ID))
 	}
 
 	switch {
-	case data.Waiting:
-		data.Status = "waiting"
-		data.StatusTitle = "Waiting for CI"
-		data.StatusSub = "The worker checks every minute and merges when the checks are green."
-	case data.Active:
-		data.Status = "queued"
-		data.StatusTitle = "Working"
-		data.StatusSub = "A request is queued; the worker will execute it within a minute."
+	case sum.Waiting:
+		sum.Status = "waiting"
+		sum.StatusTitle = "Waiting for CI"
+		sum.StatusSub = "The worker checks every minute and merges when the checks are green."
+	case sum.Active:
+		sum.Status = "queued"
+		sum.StatusTitle = "Working"
+		sum.StatusSub = "A request is queued; the worker will execute it within a minute."
 	default:
-		data.Status = "idle"
-		data.StatusTitle = "Idle"
-		if data.LastActivity != "" {
-			data.StatusSub = "Everything is synced. Last activity " + data.LastActivity + "."
+		sum.Status = "idle"
+		sum.StatusTitle = "Idle"
+		if sum.LastActivity != "" {
+			sum.StatusSub = "Everything is synced. Last activity " + sum.LastActivity + "."
 		} else {
-			data.StatusSub = "Everything is synced. Nothing to do."
+			sum.StatusSub = "Everything is synced. Nothing to do."
 		}
 	}
-	s.render(w, "overview", data)
+	return sum, nil
 }
 
 // handleManual renders the explicit request forms. Most work is handled by
@@ -511,7 +572,7 @@ func (s *Server) formOK(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (s *Server) flash(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/manual?flash="+url.QueryEscape(msg), http.StatusSeeOther)
+	http.Redirect(w, r, s.basePath+"manual?flash="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 func formNumber(r *http.Request, name string) int {

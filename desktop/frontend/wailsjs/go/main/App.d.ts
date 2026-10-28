@@ -3,8 +3,12 @@
 import {main} from '../models';
 import {http} from '../models';
 
-export function ApplyConfig(arg1:string):Promise<main.PickResult>;
+export function AddConfig():Promise<main.PickResult>;
 
-export function PickConfig():Promise<main.PickResult>;
+export function Cancel():Promise<void>;
+
+export function RemoveConfig(arg1:string):Promise<main.PickResult>;
 
 export function ServeHTTP(arg1:http.ResponseWriter,arg2:http.Request):Promise<void>;
+
+export function Start():Promise<main.PickResult>;

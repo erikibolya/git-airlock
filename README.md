@@ -126,7 +126,7 @@ airlock pr merge <n> --when-green
 airlock worker               sync + process the queue once
 airlock worker --loop 1m     run continuously
 airlock status [--watch]     terminal dashboard (TUI-lite)
-airlock ui                   local web dashboard
+airlock ui [--config ...]...  local web dashboard (one or more repos)
 airlock doctor               diagnose config, CA, token, VPN, scheduler
 airlock install-task         register the periodic worker
 airlock instructions         print an AGENTS.md snippet
@@ -143,21 +143,31 @@ prints the same data for scripts.
 
 ### Multiple repositories
 
-`airlock worker` and `airlock install-task` accept `--config` more than once.
-One scheduled task can drive several repositories. The desktop and web
-dashboards show one repository at a time (Change config).
+`airlock worker`, `airlock install-task` and `airlock ui` accept `--config`
+more than once. One scheduled task can drive several repositories, and the
+dashboard shows them together.
+
+The dashboard opens on a **repository list**: every configured repository with
+its state, pending count, last activity, last check, auto-PR flag and base
+branch. Click a repository for its detail page (the overview described below).
+In the desktop app, **tray → Repositories…** opens a picker where configs can be
+added or removed; the dashboard and the scheduled worker are updated to that
+same list.
 
 ## Web dashboard
 
 ```bash
 airlock ui --config /path/to/.airlock.toml
+# or several:
+airlock ui --config Z:/repos/Acme/A/.airlock.toml --config Z:/repos/Acme/B/.airlock.toml
 # airlock ui: http://127.0.0.1:8787/
 ```
 
-The dashboard opens on an **overview**: the worker state (idle, working, or
-waiting for CI) with an activity bar, the repository it watches, requests in
-progress with their checks, and recent activity. The overview refreshes itself
-every 15 seconds. Manual actions (open/check/merge PR, immediate sync) live on a
+The dashboard opens on a **repository list** with the worker state (idle,
+working, or waiting for CI), the repositories it watches, pending counts and
+last activity. Click a repository for its **overview**: state with an activity
+bar, mirror and base branch, requests in progress with their checks, and recent
+activity. Pages refresh themselves every 15 seconds. Manual actions (open/check/merge PR, immediate sync) live on a
 separate **manual** page, because automatic pull requests handle normal work.
 **logs** shows the worker log.
 
@@ -182,19 +192,23 @@ the browser.
 
 `airlock-desktop.exe` is a native window around the same dashboard (WebView2 on
 Windows, WebKitGTK on Linux, WKWebView on macOS): no browser tab, no local
-server to keep running. It reads the same config and queue as the CLI, adds a
-notification-area icon with **Open dashboard**, **Sync now** and **Quit**, and
-hides to the tray when you close the window. It never holds the API token; the
-scheduled worker still performs the sync and the API calls.
+server to keep running. It reads the same configs and queues as the CLI, adds a
+notification-area icon with **Open dashboard**, **Repositories…**, **Sync now**
+and **Quit**, and hides to the tray when you close the window. It never holds
+the API token; the scheduled worker still performs the sync and the API calls.
 
 ```powershell
 airlock-desktop.exe --config Z:\repos\Acme\Project\.airlock.windows.toml
+airlock-desktop.exe --config <a> --config <b>     # several repositories
+airlock-desktop.exe --repos                       # open the repository picker
 ```
 
-The path is remembered after the first launch. Without `--config` the app looks
-for `.airlock.toml` in its working directory, so the installer drops the config
-next to the executable and the shortcuts need no arguments. If no valid config
-is found, a setup screen lets you browse to one; it is applied without a restart.
+The list is remembered after the first launch. Without `--config` the app looks
+for `.airlock.toml` in its working directory, so the installer drops the first
+config next to the executable and the shortcuts need no arguments.
+**Repositories…** (the first-run screen) adds or removes configs; **Open
+dashboard** applies the list and points the scheduled worker at the same
+repositories without a restart.
 
 The desktop app is a separate Go module in [`desktop/`](desktop), built with
 [Wails](https://wails.io) and Go 1.25+. The installer sources live in
