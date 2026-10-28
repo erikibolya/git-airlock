@@ -14,6 +14,7 @@ import (
 	"github.com/gofrs/flock"
 
 	"github.com/erikibolya/git-airlock/internal/config"
+	"github.com/erikibolya/git-airlock/internal/gitutil"
 	"github.com/erikibolya/git-airlock/internal/proc"
 	"github.com/erikibolya/git-airlock/internal/provider"
 	"github.com/erikibolya/git-airlock/internal/queue"
@@ -71,6 +72,88 @@ func (w *Worker) Run(ctx context.Context) (int, error) {
 		w.Q.Log("%s %s ok=%v pending=%v: %s", req.ID, req.Action, res.OK, res.Pending, res.Message)
 	}
 	return len(requests), nil
+}
+
+// AutoOpen queues an open request for every local branch that is ahead of the
+// base branch and has no open pull request yet. The normal queue pipeline
+// creates the PR and merges it according to merge (usually when-green).
+func (w *Worker) AutoOpen(ctx context.Context) (int, error) {
+	if !w.Cfg.AutoPR {
+		return 0, nil
+	}
+	baseRef := "refs/remotes/" + w.Cfg.Remote + "/" + w.Cfg.Base
+	if !gitutil.RefExists(w.Cfg.Mirror, baseRef) {
+		baseRef = "refs/heads/" + w.Cfg.Base
+	}
+	branches, err := gitutil.BranchesAhead(ctx, w.Cfg.Mirror, baseRef)
+	if err != nil {
+		return 0, fmt.Errorf("scan branches: %w", err)
+	}
+	pending, err := w.Q.Pending()
+	if err != nil {
+		return 0, err
+	}
+	queuedOpen := map[string]bool{}
+	for _, req := range pending {
+		if req.Action == queue.ActionOpen {
+			queuedOpen[req.Head] = true
+		}
+	}
+	merge := w.Cfg.Merge
+	if merge == "" {
+		merge = "when-green"
+	}
+	queued := 0
+	for _, br := range branches {
+		if w.ignoredBranch(br.Name) || queuedOpen[br.Name] {
+			continue
+		}
+		open, err := w.P.FindOpenPR(ctx, br.Name, w.Cfg.Base)
+		if err != nil {
+			w.Q.Log("auto-pr %s: %v", br.Name, err)
+			continue
+		}
+		if open != nil {
+			continue
+		}
+		latest, err := w.P.FindPR(ctx, br.Name, w.Cfg.Base)
+		if err != nil {
+			w.Q.Log("auto-pr %s: %v", br.Name, err)
+			continue
+		}
+		// A merged (e.g. squashed) or explicitly closed PR for this exact
+		// commit means there is nothing new to propose. A newer commit is a
+		// new intent and gets a fresh PR.
+		if latest != nil && latest.HeadSHA == br.SHA && (latest.Merged || latest.State == "closed") {
+			continue
+		}
+		req := &queue.Request{
+			Action:  queue.ActionOpen,
+			Head:    br.Name,
+			HeadSHA: br.SHA,
+			Base:    w.Cfg.Base,
+			Merge:   merge,
+			Title:   br.Subject,
+			Body:    "Opened automatically by Git Airlock.",
+		}
+		id, err := w.Q.Enqueue(req)
+		if err != nil {
+			w.Q.Log("auto-pr %s: enqueue: %v", br.Name, err)
+			continue
+		}
+		w.Q.Log("auto-pr %s: queued %s (merge=%s)", br.Name, id, merge)
+		queued++
+	}
+	return queued, nil
+}
+
+func (w *Worker) ignoredBranch(name string) bool {
+	for _, pattern := range w.Cfg.AutoPRIgnore {
+		if ok, _ := filepath.Match(pattern, name); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func lockPath(queueDir string) string {

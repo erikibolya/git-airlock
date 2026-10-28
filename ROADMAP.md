@@ -19,6 +19,10 @@
   Sync-now action. A Windows installer sets up the CLI, the desktop app, the
   autostart entry and the worker task in one go. The old Win32 dashboard is
   replaced.
+- **v0.8** — automatic pull requests: `auto_pr = true` makes the worker open a
+  PR for every branch pushed to the mirror and merge it when checks are green.
+  No explicit `airlock pr open` is needed; existing open PRs and closed/merged
+  ones are left alone.
 
 ## Next
 

@@ -130,3 +130,44 @@ func TestSyncFastForwardAndDiverged(t *testing.T) {
 		t.Fatalf("expected diverged main, got %+v", report)
 	}
 }
+
+func TestBranchesAhead(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	gitCmd(t, dir, "init", "--bare")
+	gitCmd(t, dir, "symbolic-ref", "HEAD", "refs/heads/main")
+
+	work := t.TempDir()
+	gitCmd(t, work, "init")
+	gitCmd(t, work, "checkout", "-b", "main")
+	commitFile(t, work, "a.txt", "a", "base")
+	gitCmd(t, work, "remote", "add", "origin", dir)
+	gitCmd(t, work, "push", "origin", "main")
+
+	gitCmd(t, work, "checkout", "-b", "feature")
+	commitFile(t, work, "b.txt", "b", "feature work")
+	gitCmd(t, work, "push", "origin", "feature")
+
+	gitCmd(t, work, "checkout", "main")
+	gitCmd(t, work, "checkout", "-b", "merged")
+	commitFile(t, work, "c.txt", "c", "already merged")
+	gitCmd(t, work, "push", "origin", "merged")
+	gitCmd(t, work, "checkout", "main")
+	gitCmd(t, work, "merge", "--no-ff", "merged", "-m", "merge merged")
+	gitCmd(t, work, "push", "origin", "main")
+	gitCmd(t, work, "push", "origin", "merged")
+
+	got, err := BranchesAhead(ctx, dir, "refs/heads/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Name != "feature" {
+		t.Fatalf("got %+v, want only feature", got)
+	}
+	if got[0].Subject != "feature work" {
+		t.Fatalf("subject = %q", got[0].Subject)
+	}
+	if len(got[0].SHA) < 7 {
+		t.Fatalf("sha = %q", got[0].SHA)
+	}
+}

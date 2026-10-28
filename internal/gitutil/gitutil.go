@@ -317,6 +317,57 @@ func isAncestor(ctx context.Context, dir, a, b string) (bool, error) {
 	return false, err
 }
 
+// Branch is a local branch with its tip and subject.
+type Branch struct {
+	Name    string
+	SHA     string
+	Subject string
+}
+
+// RefExists reports whether ref resolves in dir.
+func RefExists(dir, ref string) bool {
+	out, err := revParse(context.Background(), dir, ref)
+	return err == nil && out != ""
+}
+
+// BranchesAhead lists local branches whose tip is not contained in baseRef.
+// baseRef may be a local or remote-tracking ref; an unknown baseRef makes every
+// branch a candidate.
+func BranchesAhead(ctx context.Context, dir, baseRef string) ([]Branch, error) {
+	out, err := run(ctx, dir, localTimeout, false, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+	if err != nil {
+		return nil, err
+	}
+	baseSHA := ""
+	if baseRef != "" {
+		baseSHA, _ = revParse(ctx, dir, baseRef)
+	}
+	baseName := strings.TrimPrefix(baseRef, "refs/heads/")
+	var branches []Branch
+	for _, name := range strings.Split(out, "\n") {
+		name = strings.TrimSpace(name)
+		if name == "" || name == baseName {
+			continue
+		}
+		sha, err := revParse(ctx, dir, "refs/heads/"+name)
+		if err != nil || sha == "" {
+			continue
+		}
+		if baseSHA != "" {
+			ancestor, err := isAncestor(ctx, dir, sha, baseSHA)
+			if err != nil {
+				return nil, err
+			}
+			if ancestor {
+				continue
+			}
+		}
+		subject, _ := run(ctx, dir, localTimeout, false, "log", "-1", "--pretty=%s", sha)
+		branches = append(branches, Branch{Name: name, SHA: sha, Subject: subject})
+	}
+	return branches, nil
+}
+
 func run(ctx context.Context, dir string, timeout time.Duration, network bool, args ...string) (string, error) {
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

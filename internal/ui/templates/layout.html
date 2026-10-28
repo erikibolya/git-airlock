@@ -41,7 +41,7 @@ a{color:var(--accent)}
 <body>
 <header>
   <div class="brand">Git Airlock</div>
-  <div class="repo">{{.Config.Repo}} · {{.Config.Provider}}</div>
+  <div class="repo">{{.Config.Repo}} · {{.Config.Provider}}{{if .Config.AutoPR}} · auto PR{{end}}</div>
   <nav><a href="/">dashboard</a><a href="/logs">logs</a></nav>
 </header>
 <main>
@@ -49,6 +49,6 @@ a{color:var(--accent)}
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 {{template "content" .}}
 </main>
-<footer>queue: {{.QueueMode}} · base: {{.Config.Base}} · default merge: {{.Config.Merge}} · {{.AuthMode}}</footer>
+<footer>queue: {{.QueueMode}} · base: {{.Config.Base}} · default merge: {{.Config.Merge}} · {{.AuthMode}}{{if .Config.AutoPR}} · auto PR: on{{end}}</footer>
 </body>
 </html>
