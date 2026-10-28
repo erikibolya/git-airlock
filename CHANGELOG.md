@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0 — 2026-10-28
+
+- Native notifications when a request is merged or fails: Windows toast (the
+  installer sets the AppUserModelID on the Start-menu shortcut), `notify-send`
+  on Linux and the Notification Center on macOS. `airlock-desktop.exe
+  --notify-test` shows a test notification.
+- The tray menu and tooltip continue to show the latest result.
+- Docker integration test: Gitea + a real worker, isolated push, simulated CI
+  status, squash merge and branch cleanup (`test/integration/run.sh`).
+
 ## 1.3.0 — 2026-10-28
 
 - `airlock mcp`: a Model Context Protocol server over stdio with

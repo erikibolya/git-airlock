@@ -1,0 +1,23 @@
+services:
+  gitea:
+    image: gitea/gitea:1.22.6
+    environment:
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__database__DB_TYPE: "sqlite3"
+      GITEA__server__ROOT_URL: "http://gitea:3000/"
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+    ports:
+      - "3000:3000"
+  tool:
+    build:
+      context: ../..
+      dockerfile: test/integration/Dockerfile
+    depends_on:
+      - gitea
+    environment:
+      GITEA_URL: "http://gitea:3000"
+    volumes:
+      - ./work:/work
+      - ./:/run/airlock:ro
+    working_dir: /work

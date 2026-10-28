@@ -3,13 +3,13 @@ module github.com/erikibolya/git-airlock/desktop
 go 1.25.0
 
 require (
+	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3
 	github.com/erikibolya/git-airlock v0.0.0
 	github.com/getlantern/systray v1.2.2
 	github.com/wailsapp/wails/v2 v2.17.0
 )
 
 require (
-	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.16 // indirect
