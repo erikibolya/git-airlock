@@ -692,6 +692,10 @@ func (a *App) onReady(icon []byte) {
 	} else {
 		mSync.Disable()
 	}
+	mUpdates := systray.AddMenuItem("Check for updates…", "Check GitHub for a newer version")
+	if version == "dev" {
+		mUpdates.Disable()
+	}
 	a.syncItem = mSync
 	a.statusItem = mStatus
 	systray.AddSeparator()
@@ -712,6 +716,9 @@ func (a *App) onReady(icon []byte) {
 				a.showWindow()
 			case <-mSync.ClickedCh:
 				go a.syncNow()
+			case <-mUpdates.ClickedCh:
+				a.showWindow()
+				go a.checkUpdates(true)
 			case <-mQuit.ClickedCh:
 				a.quit()
 				return
