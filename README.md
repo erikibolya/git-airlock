@@ -279,9 +279,10 @@ server to keep running. It reads the same configs and queues as the CLI, adds a
 notification-area icon with **Open dashboard**, **Repositories…**, **Sync now**,
 **Check for updates…** and **Quit**, a native **File / Help** menu (Dashboard,
 Repositories…, Logs, Sync now, Quit, Check for updates…, GitHub, About), and hides to
-the tray when you close the window. The tray menu also shows the latest worker
-result (click it to open the dashboard) and the tooltip follows it; it refreshes
-every 30 seconds. Merged or failed requests raise a native notification: a
+the tray when you close the window. Left-clicking the icon opens the dashboard;
+the menu opens on right-click. The tray menu also shows the latest worker result
+(click it to open the dashboard) and the tooltip follows it; it refreshes every
+30 seconds. Merged or failed requests raise a native notification: a
 Windows toast (the installer registers the AppUserModelID on the Start-menu
 shortcut), `notify-send` on Linux, or the Notification Center on macOS. Use
 `airlock-desktop.exe --notify-test` to check the setup. Windows "Do Not Disturb"
