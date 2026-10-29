@@ -80,7 +80,7 @@ scoop install git-airlock/git-airlock
 
 The winget manifest for `ErikIbolya.GitAirlock` is in
 [microsoft/winget-pkgs#464029](https://github.com/microsoft/winget-pkgs/pull/464029)
-(still in Microsoft review as of 1.8.3); once merged, install it with
+(still in Microsoft review as of 1.8.4); once merged, install it with
 `winget install ErikIbolya.GitAirlock`. The manifests are generated from
 [`packaging/`](packaging).
 
@@ -276,9 +276,9 @@ on the VPN-connected worker.
 `airlock-desktop.exe` is a native window around the same dashboard (WebView2 on
 Windows, WebKitGTK on Linux, WKWebView on macOS): no browser tab, no local
 server to keep running. It reads the same configs and queues as the CLI, adds a
-notification-area icon with **Open dashboard**, **Repositories…**, **Sync now**
-and **Quit**, a native **File / Help** menu (Dashboard, Repositories…, Logs,
-Sync now, Quit, Check for updates…, GitHub, About), and hides to
+notification-area icon with **Open dashboard**, **Repositories…**, **Sync now**,
+**Check for updates…** and **Quit**, a native **File / Help** menu (Dashboard,
+Repositories…, Logs, Sync now, Quit, Check for updates…, GitHub, About), and hides to
 the tray when you close the window. The tray menu also shows the latest worker
 result (click it to open the dashboard) and the tooltip follows it; it refreshes
 every 30 seconds. Merged or failed requests raise a native notification: a

@@ -84,6 +84,8 @@
 - **v1.8.3** — the dashboard is read-only: the Manual page and its menu entry
   are gone, along with the form POST endpoints. Use the CLI for PR actions and
   the tray/File **Sync now** for an immediate sync.
+- **v1.8.4** — **Check for updates…** is available from the tray menu as well as
+  the Help menu.
 
 ## Next
 
