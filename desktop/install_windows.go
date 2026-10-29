@@ -10,8 +10,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/getlantern/systray"
-
 	"github.com/erikibolya/git-airlock/internal/update"
 )
 
@@ -22,7 +20,7 @@ func (a *App) installUpdate(m *update.Manifest) {
 		return
 	}
 	a.showWindow()
-	systray.SetTooltip("Git Airlock: downloading update…")
+	a.setTooltip("Git Airlock: downloading update…")
 	dest := filepath.Join(os.TempDir(), "GitAirlockSetup-"+update.NormalizeVersion(m.Version)+".exe")
 	sha, err := update.Download(context.Background(), m.Windows.URL, dest)
 	if err != nil {
@@ -50,7 +48,7 @@ func (a *App) installUpdate(m *update.Manifest) {
 		a.error("Update failed", err.Error())
 		return
 	}
-	systray.SetTooltip("Git Airlock: installing update…")
+	a.setTooltip("Git Airlock: installing update…")
 	cmd := exec.Command("cmd.exe", "/c", script)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 	if err := cmd.Start(); err != nil {

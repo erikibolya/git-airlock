@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getlantern/systray"
-
 	"github.com/erikibolya/git-airlock/internal/queue"
 )
 
@@ -55,7 +53,7 @@ func (a *App) pollResults(seen map[string]string, initial bool) {
 		if a.statusItem != nil {
 			a.statusItem.SetTitle(cfg.Repo + ": " + statusLabel(res))
 		}
-		systray.SetTooltip(truncate("Git Airlock: "+body, 120))
+		a.setTooltip(truncate("Git Airlock: "+body, 120))
 		if initial {
 			continue
 		}
