@@ -1,0 +1,138 @@
+name: Dev build
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "desktop/**"
+      - "cmd/**"
+      - "internal/**"
+      - "installer/**"
+      - ".github/workflows/dev-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dev-build
+  cancel-in-progress: true
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compute dev version
+        id: version
+        run: |
+          set -euo pipefail
+          base="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo v0.0.0)"
+          base="${base#v}"
+          base="${base%%-*}"
+          IFS=. read -r major minor patch <<< "$base"
+          echo "version=${major}.${minor}.$((patch + 1))-dev.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test ./...
+
+  desktop:
+    needs: [version, test]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
+      - name: Build desktop app
+        shell: pwsh
+        run: |
+          $version = "${{ needs.version.outputs.version }}"
+          $path = Join-Path $env:GITHUB_WORKSPACE "desktop/wails.json"
+          $json = Get-Content $path -Raw | ConvertFrom-Json
+          $json.info.productVersion = $version
+          [System.IO.File]::WriteAllText($path, ($json | ConvertTo-Json -Depth 10))
+          Push-Location (Join-Path $env:GITHUB_WORKSPACE "desktop")
+          try {
+            wails build -clean -platform windows/amd64 -ldflags "-X main.version=$version"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+        shell: pwsh
+      - name: Build installer
+        shell: pwsh
+        run: ./installer/build.ps1 -SkipDesktop -Version ${{ needs.version.outputs.version }}
+      - name: Build dev manifest
+        shell: pwsh
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          $version = "${{ needs.version.outputs.version }}"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          go run ./cmd/updatesign manifest --version $version `
+            --installer "installer/dist/GitAirlockSetup-$version.exe" `
+            --url "https://github.com/erikibolya/git-airlock/releases/download/dev/GitAirlockSetup-$version.exe" `
+            --notes "Dev build from dev@${{ github.sha }}" `
+            --out "dist/dev.json"
+      - name: Stage dev files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item desktop/build/bin/airlock-desktop.exe dist/
+          Copy-Item installer/dist/GitAirlockSetup-*.exe dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: airlock-dev-windows
+          path: dist/*
+
+  publish:
+    needs: [version, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: airlock-dev-windows
+          path: dist
+      - name: Checksums
+        run: cd dist && sha256sum * > checksums.txt
+      - name: Publish rolling dev prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view dev --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload dev dist/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit dev --repo "$GITHUB_REPOSITORY" --prerelease \
+              --notes "Rolling Windows build from the dev branch. Latest: $VERSION"
+            gh release view dev --repo "$GITHUB_REPOSITORY" --json assets \
+              --jq '.assets[].name' |
+              grep -E '^GitAirlockSetup-.*\.exe$' |
+              grep -v "GitAirlockSetup-${VERSION}.exe" |
+              while read -r asset; do
+                gh release delete-asset dev "$asset" --repo "$GITHUB_REPOSITORY" --yes
+              done || true
+          else
+            gh release create dev dist/* --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "Dev build" \
+              --notes "Rolling Windows build from the dev branch. Latest: $VERSION"
+          fi

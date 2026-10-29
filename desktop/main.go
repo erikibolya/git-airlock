@@ -293,6 +293,8 @@ func (a *App) menu() *menu.Menu {
 
 	help := m.AddSubmenu("Help")
 	help.AddText("Check for updates…", nil, func(*menu.CallbackData) { go a.checkUpdates(true) })
+	help.AddText("Install latest dev build…", nil, func(*menu.CallbackData) { go a.checkDevUpdates() })
+	help.AddText("Revert to last stable version…", nil, func(*menu.CallbackData) { go a.revertToStable() })
 	help.AddText("Git Airlock on GitHub", nil, func(*menu.CallbackData) {
 		if a.ctx != nil {
 			wailsruntime.BrowserOpenURL(a.ctx, "https://github.com/erikibolya/git-airlock")
@@ -698,6 +700,8 @@ func (a *App) onReady(icon []byte) {
 	if version == "dev" {
 		mUpdates.Disable()
 	}
+	mDev := systray.AddMenuItem("Install latest dev build…", "Download and install the latest build from the dev branch")
+	mRevert := systray.AddMenuItem("Revert to last stable version…", "Reinstall the latest stable release")
 	a.syncItem = mSync
 	a.statusItem = mStatus
 	systray.AddSeparator()
@@ -721,6 +725,12 @@ func (a *App) onReady(icon []byte) {
 			case <-mUpdates.ClickedCh:
 				a.showWindow()
 				go a.checkUpdates(true)
+			case <-mDev.ClickedCh:
+				a.showWindow()
+				go a.checkDevUpdates()
+			case <-mRevert.ClickedCh:
+				a.showWindow()
+				go a.revertToStable()
 			case <-mQuit.ClickedCh:
 				a.quit()
 				return

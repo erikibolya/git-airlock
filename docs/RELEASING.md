@@ -150,6 +150,25 @@ install -m 0755 airlock-linux-amd64 /path/to/repos/.bin/airlock
 If a worker or container runs its own copy, stop it first (on Windows the
 scheduled task is `Git Airlock`), replace the binary and start it again.
 
+## Dev builds
+
+A push to `dev` that touches `desktop/`, `cmd/`, `internal/` or `installer/`
+(or a manual **Dev build** workflow run) publishes a rolling `dev` prerelease:
+
+- `GitAirlockSetup-<base>-dev.<run>.exe` — Windows installer;
+- `dev.json` — the signed manifest the desktop app reads from
+  **Help → Install latest dev build…**;
+- `airlock-desktop.exe` and `checksums.txt`.
+
+The version is the next patch above the newest tag (`v1.8.6` →
+`1.8.7-dev.<run>`). The `dev` release is marked as a prerelease, so
+`releases/latest` and the normal update check still point at the stable
+release. **Help → Revert to last stable version…** installs `latest.json`
+again, even when its version is lower than the running dev build.
+
+The first dev build has to be installed manually (download the installer from
+the `dev` release); after that the menu items handle both directions.
+
 ## Signing key rotation
 
 1. `go run ./cmd/updatesign keygen --private-key-file <path>`

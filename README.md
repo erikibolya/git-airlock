@@ -92,7 +92,10 @@ scheduled worker task is created during setup.
 The desktop app updates itself. On startup and from **Help → Check for
 updates…** it reads the signed `latest.json` from the latest release, verifies
 the Ed25519 signature and the installer SHA256, and then downloads, silently
-installs and restarts. `airlock-desktop --check-updates` runs the same check
+installs and restarts. **Help → Install latest dev build…** does the same with
+the signed `dev.json` from the rolling `dev` prerelease, and **Help → Revert to
+last stable version…** reinstalls the latest stable release even when a dev
+build is newer. `airlock-desktop --check-updates` runs the stable check
 headlessly. Package-manager installs upgrade through `brew`, `scoop` or
 `winget`.
 
