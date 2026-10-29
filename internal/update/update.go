@@ -38,35 +38,87 @@ func NormalizeVersion(v string) string {
 	return strings.TrimPrefix(strings.TrimSpace(v), "v")
 }
 
-// Compare returns -1, 0 or 1 for semantic versions. Pre-release suffixes are
-// ignored; this project does not publish them as latest.
+// Compare returns -1, 0 or 1 for semantic versions. A pre-release sorts before
+// the matching release (1.8.7-dev.2 < 1.8.7), and pre-release identifiers are
+// compared segment by segment, so dev builds can move forward and a stable
+// release can supersede them. Build metadata after "+" is ignored.
 func Compare(a, b string) int {
-	as := strings.Split(NormalizeVersion(a), ".")
-	bs := strings.Split(NormalizeVersion(b), ".")
-	for i := 0; i < len(as) || i < len(bs); i++ {
-		ai, bi := 0, 0
-		if i < len(as) {
-			ai = atoiSegment(as[i])
-		}
-		if i < len(bs) {
-			bi = atoiSegment(bs[i])
-		}
-		if ai < bi {
+	ac, apre := parseVersion(a)
+	bc, bpre := parseVersion(b)
+	for i := 0; i < len(ac); i++ {
+		if ac[i] < bc[i] {
 			return -1
 		}
-		if ai > bi {
+		if ac[i] > bc[i] {
 			return 1
 		}
+	}
+	switch {
+	case len(apre) == 0 && len(bpre) == 0:
+		return 0
+	case len(apre) == 0:
+		return 1
+	case len(bpre) == 0:
+		return -1
+	}
+	for i := 0; i < len(apre) && i < len(bpre); i++ {
+		if c := compareIdentifier(apre[i], bpre[i]); c != 0 {
+			return c
+		}
+	}
+	switch {
+	case len(apre) < len(bpre):
+		return -1
+	case len(apre) > len(bpre):
+		return 1
 	}
 	return 0
 }
 
-func atoiSegment(s string) int {
-	if i := strings.IndexByte(s, '-'); i >= 0 {
-		s = s[:i]
+func parseVersion(v string) ([3]int, []string) {
+	var core [3]int
+	v = NormalizeVersion(v)
+	if i := strings.IndexByte(v, '+'); i >= 0 {
+		v = v[:i]
 	}
-	n, _ := strconv.Atoi(s)
-	return n
+	var pre []string
+	if i := strings.IndexByte(v, '-'); i >= 0 {
+		pre = strings.Split(v[i+1:], ".")
+		v = v[:i]
+	}
+	parts := strings.Split(v, ".")
+	for i := 0; i < len(core) && i < len(parts); i++ {
+		n, _ := strconv.Atoi(strings.TrimSpace(parts[i]))
+		core[i] = n
+	}
+	return core, pre
+}
+
+func compareIdentifier(a, b string) int {
+	an, aerr := strconv.Atoi(a)
+	bn, berr := strconv.Atoi(b)
+	switch {
+	case aerr == nil && berr == nil:
+		if an < bn {
+			return -1
+		}
+		if an > bn {
+			return 1
+		}
+		return 0
+	case aerr == nil:
+		// Numeric identifiers have lower precedence than alphanumeric ones.
+		return -1
+	case berr == nil:
+		return 1
+	}
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
 }
 
 // Payload is what gets signed: version and lower-case sha256 on separate lines.
