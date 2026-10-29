@@ -115,6 +115,7 @@ type App struct {
 
 	current    atomic.Pointer[dashBox]
 	setupMode  atomic.Bool
+	setupHits  atomic.Uint64
 	pendingNav atomic.Value
 	lastRepo   atomic.Value
 
@@ -189,11 +190,24 @@ func (a *App) startup(ctx context.Context) {
 
 // navigate moves the webview to a dashboard path without reloading the app.
 func (a *App) navigate(target string) {
-	a.setupMode.Store(target == "/repositories")
+	setup := target == "/repositories"
+	a.setupMode.Store(setup)
 	if a.ctx != nil {
 		wailsruntime.WindowExecJS(a.ctx, "window.location.assign("+strconv.Quote(target)+")")
 	}
 	a.showWindow()
+	if setup {
+		// If WebView2 drops the navigation (strict CSP pages have been known
+		// to), a reload still serves the picker: ServeHTTP returns the setup
+		// page for every path while setupMode is set. Only do that when the
+		// navigation did not reach ServeHTTP.
+		before := a.setupHits.Load()
+		time.AfterFunc(500*time.Millisecond, func() {
+			if a.ctx != nil && a.setupMode.Load() && a.setupHits.Load() == before {
+				wailsruntime.WindowReload(a.ctx)
+			}
+		})
+	}
 }
 
 func (a *App) repoBase() string {
@@ -254,13 +268,12 @@ func (a *App) menu() *menu.Menu {
 	file.AddText("Dashboard", nil, func(*menu.CallbackData) { a.navigate("/") })
 	file.AddText("Repositories…", nil, func(*menu.CallbackData) { a.navigate("/repositories") })
 	file.AddSeparator()
+	file.AddText("Manual", nil, func(*menu.CallbackData) { a.navigateRepo("manual") })
+	file.AddText("Logs", nil, func(*menu.CallbackData) { a.navigateRepo("logs") })
+	file.AddSeparator()
 	file.AddText("Sync now", nil, func(*menu.CallbackData) { go a.syncNow() })
 	file.AddSeparator()
 	file.AddText("Quit", keys.CmdOrCtrl("q"), func(*menu.CallbackData) { a.quit() })
-
-	view := m.AddSubmenu("View")
-	view.AddText("Manual", nil, func(*menu.CallbackData) { a.navigateRepo("manual") })
-	view.AddText("Logs", nil, func(*menu.CallbackData) { a.navigateRepo("logs") })
 
 	help := m.AddSubmenu("Help")
 	help.AddText("Check for updates…", nil, func(*menu.CallbackData) { go a.checkUpdates(true) })
@@ -452,6 +465,7 @@ func (a *App) serveAction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) serveSetup(w http.ResponseWriter, _ *http.Request) {
+	a.setupHits.Add(1)
 	a.mu.Lock()
 	paths := append([]string(nil), a.paths...)
 	loadErrs := append([]string(nil), a.loadErrs...)
@@ -640,16 +654,9 @@ func (a *App) onReady(icon []byte) {
 		for {
 			select {
 			case <-mOpen.ClickedCh:
-				if a.setupMode.CompareAndSwap(true, false) && a.ctx != nil {
-					wailsruntime.WindowReload(a.ctx)
-				}
-				a.showWindow()
+				a.navigate("/")
 			case <-mRepos.ClickedCh:
-				a.setupMode.Store(true)
-				if a.ctx != nil {
-					wailsruntime.WindowReload(a.ctx)
-				}
-				a.showWindow()
+				a.navigate("/repositories")
 			case <-mStatus.ClickedCh:
 				a.showWindow()
 			case <-mSync.ClickedCh:

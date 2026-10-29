@@ -18,9 +18,9 @@ func installWindows(o Options) error {
 		return fmt.Errorf("LOCALAPPDATA is not set")
 	}
 	dir := filepath.Join(local, "git-airlock")
-	// The worker hides its own console window, so the task can start the exe
-	// directly instead of going through a VBS wrapper (pre-1.7.3).
-	args := "worker --hidden"
+	// airlock-worker.exe has no console window; if it is missing, airlock.exe
+	// hides its own console (--hidden).
+	workerExe, args := workerCommand(o.ExePath)
 	for _, p := range o.ConfigPaths {
 		args += fmt.Sprintf(` --config "%s"`, p)
 	}
@@ -30,7 +30,7 @@ func installWindows(o Options) error {
 		minutes = 1
 	}
 	xmlPath := filepath.Join(dir, "worker-task.xml")
-	xmlBody := taskXML(minutes, o.ExePath, args)
+	xmlBody := taskXML(minutes, workerExe, args)
 
 	if o.Print {
 		fmt.Printf("Write %s:\n%s\n", xmlPath, xmlBody)

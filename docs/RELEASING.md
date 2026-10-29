@@ -8,7 +8,7 @@ publishes the CLI archives, the Windows desktop build, the Inno Setup installer,
 
 ```bash
 # version without the tag prefix
-VERSION=1.7.3
+VERSION=1.7.4
 ```
 
 - Move the changelog entries under a new `## $VERSION — YYYY-MM-DD` heading in

@@ -1,10 +1,10 @@
 # Code signing
 
-Git Airlock ships Windows executables (`airlock.exe`, `airlock-desktop.exe`,
-`GitAirlockSetup-<version>.exe`). Unsigned binaries are periodically quarantined
-by Microsoft Defender's ML heuristics as `Trojan:Win32/Bearfoos.B!ml`, which stops
-the scheduled worker. Signing is the only reliable fix; there is no allow-list
-for unsigned software.
+Git Airlock ships Windows executables (`airlock.exe`, `airlock-worker.exe`,
+`airlock-desktop.exe`, `GitAirlockSetup-<version>.exe`). Unsigned binaries are
+periodically quarantined by Microsoft Defender's ML heuristics as
+`Trojan:Win32/Bearfoos.B!ml`, which stops the scheduled worker. Signing is the
+only reliable fix; there is no allow-list for unsigned software.
 
 ## Policy
 
@@ -26,9 +26,9 @@ Signing rules:
   on GitHub-hosted runners are submitted.
 - The signing approver reviews the run and the diff since the previous tag before
   approving the SignPath request.
-- `airlock.exe` and `airlock-desktop.exe` are signed **before** the installer is
-  built, so the copies inside the installer are signed too. The installer is then
-  signed as well.
+- `airlock.exe`, `airlock-worker.exe` and `airlock-desktop.exe` are signed
+  **before** the installer is built, so the copies inside the installer are
+  signed too. The installer is then signed as well.
 - The Ed25519 signature of `latest.json` (see
   [RELEASING.md](RELEASING.md#update-signing-key)) is independent of Authenticode
   and stays in place.
@@ -46,7 +46,8 @@ Signing rules:
    workflow.
 4. Create two artifact configurations, using **Upload an artifact sample** with a
    real release:
-   - `exes` — a ZIP containing `airlock.exe` and `airlock-desktop.exe`.
+   - `exes` — a ZIP containing `airlock.exe`, `airlock-worker.exe` and
+     `airlock-desktop.exe`.
    - `installer` — `GitAirlockSetup-<version>.exe`.
 5. Add the repository variables and secret used by the workflow:
 
@@ -71,8 +72,9 @@ The installer embeds the executables, so the order matters:
 
 1. `wails build` → `desktop/build/bin/airlock-desktop.exe`
 2. `installer/build.ps1 -SkipDesktop -SkipInstaller -Version <v>` → builds
-   `installer/files/airlock.exe` (with PE metadata) and copies the desktop exe.
-3. Sign both executables (SignPath request 1, artifact config `exes`).
+   `installer/files/airlock.exe` and `airlock-worker.exe` (with PE metadata) and
+   copies the desktop exe.
+3. Sign the three executables (SignPath request 1, artifact config `exes`).
 4. Put the signed files back into `desktop/build/bin/` and `installer/files/`.
 5. `installer/build.ps1 -SkipDesktop -SkipCLI -Version <v>` → builds the
    installer from the signed payload.
@@ -81,7 +83,8 @@ The installer embeds the executables, so the order matters:
    SHA256, and sign it with the Ed25519 update key.
 8. Upload the signed installer, the signed executables and `latest.json`.
 
-`-SkipCLI` exists so step 5 cannot overwrite the signed `airlock.exe`.
+`-SkipCLI` exists so step 5 cannot overwrite the signed `airlock.exe` or
+`airlock-worker.exe`.
 
 ## Workflow patch
 
@@ -97,6 +100,7 @@ project.
           New-Item -ItemType Directory -Force sign-input | Out-Null
           Copy-Item desktop/build/bin/airlock-desktop.exe sign-input/
           Copy-Item installer/files/airlock.exe sign-input/
+          Copy-Item installer/files/airlock-worker.exe sign-input/
 
       - name: Upload unsigned executables
         id: unsigned-exes
@@ -122,6 +126,7 @@ project.
         run: |
           Copy-Item signed-exes/airlock-desktop.exe desktop/build/bin/ -Force
           Copy-Item signed-exes/airlock.exe installer/files/ -Force
+          Copy-Item signed-exes/airlock-worker.exe installer/files/ -Force
 ```
 
 Repeat the same upload/submit/download pattern for
@@ -136,7 +141,8 @@ product version as the release:
 - `airlock.exe` — [installer/winres.json](../installer/winres.json) is rendered by
   [`go-winres`](https://github.com/tc-hib/go-winres) during the build. It sets
   `CompanyName`, `ProductName`, `FileDescription`, `FileVersion`,
-  `ProductVersion`, the icon and a manifest.
+  `ProductVersion`, the icon and a manifest. `airlock-worker.exe` is built from
+  the same package, so it carries the same resource.
 - `airlock-desktop.exe` — the `info` block in
   [desktop/wails.json](../desktop/wails.json) feeds Wails' Windows resource.
   `installer/build.ps1` and the release workflow stamp `productVersion` from the
@@ -150,10 +156,10 @@ binaries score worse with Defender's ML model; the size cost is a few megabytes.
 Symptom: the worker stops running. Up to 1.7.2 the task ran through
 `worker.vbs`, so the failure appeared as a Windows Script Host dialog (`line 5`,
 `0x800700E1` "the file contains a virus or potentially unwanted software", then
-`0x80070002` after Defender quarantines the executable). 1.7.3 and later start
-`airlock.exe worker --hidden` directly, so the failure is only recorded in Task
-Scheduler (last run result) and no dialog appears. Either way, the dialog or the
-scheduler repeats every minute.
+`0x80070002` after Defender quarantines the executable). 1.7.3 starts the worker
+directly; 1.7.4 uses `airlock-worker.exe` (GUI subsystem, no console). In both,
+the failure is only recorded in Task Scheduler (last run result) and no dialog
+appears. The scheduler retries every minute.
 
 1. Confirm what was flagged (PowerShell):
 

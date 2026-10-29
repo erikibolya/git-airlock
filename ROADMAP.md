@@ -68,6 +68,9 @@
 - **v1.7.3** — unsigned stopgap for Defender: PE metadata and an unstripped
   Windows CLI to reduce ML false positives, and the scheduled task runs
   `airlock.exe worker --hidden` directly (no VBS launcher, no WSH dialogs).
+- **v1.7.4** — the worker runs from `airlock-worker.exe`, a GUI-subsystem build
+  with no console window; the tray **Repositories…** entry opens the picker,
+  and the native menu is consolidated into File + Help.
 
 ## Next
 

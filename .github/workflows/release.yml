@@ -48,9 +48,11 @@ jobs:
           name="airlock-${GOOS}-${GOARCH}"
           mkdir -p dist
           bin="airlock"
+          worker=""
           ldflags="-s -w -X main.version=${VERSION}"
           if [ "$GOOS" = "windows" ]; then
             bin="airlock.exe"
+            worker="airlock-worker.exe"
             # Embed PE metadata and keep the symbols: anonymous, stripped
             # binaries score worse with Defender's ML heuristics.
             version="${VERSION#v}"
@@ -60,9 +62,13 @@ jobs:
             ldflags="-X main.version=${VERSION}"
           fi
           go build -trimpath -ldflags "$ldflags" -o "dist/${bin}" ./cmd/airlock
+          if [ -n "$worker" ]; then
+            # GUI subsystem: Task Scheduler starts the worker without a console.
+            go build -trimpath -ldflags "-H=windowsgui ${ldflags}" -o "dist/${worker}" ./cmd/airlock
+          fi
           cp README.md LICENSE dist/
           if [ "$GOOS" = "windows" ]; then
-            (cd dist && zip -q -r "${name}.zip" "${bin}" README.md LICENSE)
+            (cd dist && zip -q -r "${name}.zip" "${bin}" "${worker}" README.md LICENSE)
           else
             mv "dist/${bin}" "dist/${name}"
             tar -C dist -czf "dist/${name}.tar.gz" "${name}" README.md LICENSE
