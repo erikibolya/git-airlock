@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.2 — 2026-10-29
+
+- The repository picker edits a draft list: **Add config…** and **remove** no
+  longer touch the saved list until **Save and open dashboard**, and **Cancel**
+  restores the running repositories without changing the scheduled worker.
+- The picker's primary action is now labelled **Save and open dashboard**, so it
+  is clear that it also re-registers the worker task.
+
 ## 1.8.1 — 2026-10-29
 
 - Faster page switches: the dashboard caches the queue summary for three

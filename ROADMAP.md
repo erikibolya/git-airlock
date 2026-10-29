@@ -78,6 +78,9 @@
   no idle auto-refresh), in-page nav hidden in the desktop window, a hidden
   `schtasks` console in the picker, native notifications for **Sync now** and a
   clearer manual page.
+- **v1.8.2** — the repository picker edits a draft list; **Save and open
+  dashboard** persists it and updates the worker, while **Cancel** restores the
+  running repositories.
 
 ## Next
 
