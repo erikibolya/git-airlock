@@ -74,6 +74,10 @@
 - **v1.8.0** — native-looking redesign of the dashboard and repository picker
   using the RedLine visual language: 13px Segoe UI, light/dark palette, compact
   header and status bar, flat panels, pills and restrained controls.
+- **v1.8.1** — faster navigation (3s summary cache, no per-pending result reads,
+  no idle auto-refresh), in-page nav hidden in the desktop window, a hidden
+  `schtasks` console in the picker, native notifications for **Sync now** and a
+  clearer manual page.
 
 ## Next
 
