@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Windows builds carry PE metadata: `installer/winres.json` is rendered by
+  `go-winres` for `airlock.exe` (company, product, file description, version,
+  icon, manifest) and the desktop `info` block in `desktop/wails.json` is stamped
+  from the release tag. Windows binaries also keep their symbols. All of this
+  makes the executables look less like anonymous malware to Defender's ML
+  heuristics, which have been quarantining the unsigned worker as
+  `Trojan:Win32/Bearfoos.B!ml` (false positive).
+- Added a code signing policy and the SignPath Foundation setup guide in
+  [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md); the application was submitted on
+  2026-10-29 and releases stay unsigned until it is approved.
+- Added an antivirus troubleshooting section to the README.
+
 ## 1.7.2 — 2026-10-29
 
 - The desktop tray icon no longer goes dead. The systray message loop was started
