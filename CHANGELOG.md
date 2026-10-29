@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Install latest dev build…** and **Revert to last stable version…** are in
+  the Help menu and the tray menu. Dev builds come from the signed rolling
+  `dev` prerelease and can be installed without a stable release; the revert
+  action installs `latest.json` even when it is older than the running build.
+- Version comparison understands pre-releases (`1.8.7-dev.2` sorts before
+  `1.8.7`), so a dev build is superseded by the matching stable release.
+
 ## 1.8.6 — 2026-10-29
 
 - Left-clicking the tray icon opens the dashboard; the tray menu is now on
