@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.8.5 — 2026-10-29
+
+- **Sync now** brings the window forward and shows an in-app banner
+  ("Syncing mirrors…" and then the result or error), so feedback no longer
+  depends on Windows notification settings. The native toast remains as a
+  background fallback.
+- The Logs page uses the whole window: the log panel has no inner scrollbar,
+  long lines wrap and the page itself scrolls.
+
 ## 1.8.4 — 2026-10-29
 
 - The tray menu has **Check for updates…**, matching **Help → Check for
