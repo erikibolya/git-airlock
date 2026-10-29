@@ -80,7 +80,7 @@ scoop install git-airlock/git-airlock
 
 The winget manifest for `ErikIbolya.GitAirlock` is in
 [microsoft/winget-pkgs#464029](https://github.com/microsoft/winget-pkgs/pull/464029)
-(still in Microsoft review as of 1.7.3); once merged, install it with
+(still in Microsoft review as of 1.7.4); once merged, install it with
 `winget install ErikIbolya.GitAirlock`. The manifests are generated from
 [`packaging/`](packaging).
 
@@ -154,7 +154,8 @@ airlock install-task --config /path/to/repo/.airlock.toml
 
 That creates a **Windows Task Scheduler** task, a **systemd user timer**, or a
 **launchd agent**, depending on the OS. On Windows the task starts
-`airlock.exe worker --hidden` directly; the worker hides its own console.
+`airlock-worker.exe`, a GUI-subsystem build that never creates a console window;
+portable installs without that file fall back to `airlock.exe worker --hidden`.
 
 > The worker must run where the mirror and queue paths resolve. In the common
 > home-lab setup that is WSL/Linux next to the shared folder. Windows workers
@@ -277,8 +278,8 @@ on the VPN-connected worker.
 Windows, WebKitGTK on Linux, WKWebView on macOS): no browser tab, no local
 server to keep running. It reads the same configs and queues as the CLI, adds a
 notification-area icon with **Open dashboard**, **Repositories…**, **Sync now**
-and **Quit**, a native **File / View / Help** menu (Dashboard, Repositories…,
-Sync now, Quit, Manual, Logs, Check for updates…, GitHub, About), and hides to
+and **Quit**, a native **File / Help** menu (Dashboard, Repositories…, Manual,
+Logs, Sync now, Quit, Check for updates…, GitHub, About), and hides to
 the tray when you close the window. The tray menu also shows the latest worker
 result (click it to open the dashboard) and the tooltip follows it; it refreshes
 every 30 seconds. Merged or failed requests raise a native notification: a

@@ -32,7 +32,7 @@ function Resolve-Command([string]$name, [string[]]$candidates) {
 
 if (-not $Version) {
     $tag = (git -C $root describe --tags --abbrev=0 2>$null)
-    if ($tag) { $Version = $tag } else { $Version = "1.7.3" }
+    if ($tag) { $Version = $tag } else { $Version = "1.7.4" }
 }
 $Version = $Version.TrimStart("v")
 Write-Host "Building Git Airlock $Version" -ForegroundColor Cyan
@@ -86,11 +86,14 @@ if (-not $SkipCLI) {
         if ($LASTEXITCODE -ne 0) { throw "go-winres failed with exit code $LASTEXITCODE" }
         & $goExe build -trimpath -ldflags "-X main.version=$Version" -o (Join-Path $files "airlock.exe") ./cmd/airlock
         if ($LASTEXITCODE -ne 0) { throw "go build failed with exit code $LASTEXITCODE" }
+        # GUI-subsystem copy for Task Scheduler: no console window is created.
+        & $goExe build -trimpath -ldflags "-H=windowsgui -X main.version=$Version" -o (Join-Path $files "airlock-worker.exe") ./cmd/airlock
+        if ($LASTEXITCODE -ne 0) { throw "go build (worker) failed with exit code $LASTEXITCODE" }
     } finally {
         Pop-Location
     }
-} elseif (-not (Test-Path (Join-Path $files "airlock.exe"))) {
-    throw "airlock.exe is missing; build the CLI first (drop -SkipCLI)."
+} elseif (-not (Test-Path (Join-Path $files "airlock.exe")) -or -not (Test-Path (Join-Path $files "airlock-worker.exe"))) {
+    throw "airlock.exe or airlock-worker.exe is missing; build the CLI first (drop -SkipCLI)."
 }
 
 if ($Config) {

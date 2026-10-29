@@ -1,6 +1,6 @@
 #define AppName "Git Airlock"
 #ifndef AppVersion
-  #define AppVersion "1.7.3"
+  #define AppVersion "1.7.4"
 #endif
 #define AppPublisher "Erik Ibolya"
 #define AppExe "airlock-desktop.exe"
@@ -39,6 +39,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "files\airlock.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "files\airlock-worker.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "files\airlock-desktop.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; The active config lives next to the executables. Shortcuts start in {app}, so
 ; the desktop app finds it without --config. Reinstalls keep the existing file.

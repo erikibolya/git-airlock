@@ -58,13 +58,13 @@ Desktop module (Go 1.25+, Windows needs WebView2, `wails` on PATH):
 ```bash
 cd desktop
 go vet ./...
-wails build -ldflags "-X main.version=1.7.3"
+wails build -ldflags "-X main.version=1.7.4"
 ```
 
 Installer, CLI and desktop in one step (Windows):
 
 ```powershell
-pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Project\.airlock.windows.toml -Version v1.7.3
+pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Project\.airlock.windows.toml -Version v1.7.4
 ```
 
 Integration test (Docker Compose v2):
@@ -125,15 +125,18 @@ branch cleanup. It needs network access to pull images.
 - Unsigned Windows binaries can be quarantined by Defender as
   `Trojan:Win32/Bearfoos.B!ml` (false positive). Up to 1.7.2 the task ran through
   `worker.vbs`, so the failure showed as a WSH dialog with `0x800700E1`, then
-  `0x80070002` once the exe was quarantined. 1.7.3+ runs
-  `airlock.exe worker --hidden` directly; failures are only in Task Scheduler
-  history. Verify SHA256 and the Ed25519 signature before trusting a download;
-  recovery steps and the SignPath signing plan are in
+  `0x80070002` once the exe was quarantined. 1.7.3+ runs the worker directly;
+  1.7.4+ uses `airlock-worker.exe` (GUI subsystem, no console), so failures are
+  only in Task Scheduler history. Verify SHA256 and the Ed25519 signature before
+  trusting a download; recovery steps and the SignPath signing plan are in
   [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md).
 - Windows builds carry PE metadata (`installer/winres.json` for the CLI, the
   `info` block in `desktop/wails.json` for the app) and are not stripped on
   purpose. Do not remove the metadata; SignPath requires it and it reduces
   Defender false positives.
+- `airlock-worker.exe` is a second build of `./cmd/airlock` with
+  `-H=windowsgui`, installed next to `airlock.exe` and used by the scheduled
+  task. Do not drop it from the installer, or the console window comes back.
 - `installer/build.ps1` stamps `info.productVersion` from `-Version`; a bare
   `wails build` keeps the `0.0.0` placeholder.
 - When replacing `airlock.exe` on Windows, stop the scheduled task first
@@ -156,13 +159,12 @@ branch cleanup. It needs network access to pull images.
 
 ## Current status (2026-10-29)
 
-- Latest release: **v1.7.3** (unsigned stopgap: PE metadata, no VBS launcher).
-  Homebrew tap and Scoop bucket are updated; the Linux `.bin/airlock` still runs
-  1.7.1, which is fine because the CLI did not change.
-- The Windows box still has a quarantined `airlock.exe` from the 1.7.2 update.
-  Install 1.7.3 after adding the Defender exclusion (docs/CODE_SIGNING.md), then
-  submit the 1.7.3 `airlock.exe` to Microsoft as a false positive. The scheduled
-  task `Git Airlock` is defined and runs every minute.
+- Latest release: **v1.7.4** (no-console `airlock-worker.exe`, tray picker and
+  menu fixes). Homebrew tap and Scoop bucket are updated; the Linux
+  `.bin/airlock` still runs 1.7.1, which is fine because the CLI did not change.
+- The Windows box runs 1.7.3 with the Defender exclusion; install 1.7.4 to get
+  the GUI worker (no console popups) and the tray/menu fixes. The scheduled task
+  `Git Airlock` is defined and runs every minute.
 - Code signing: application submitted to SignPath Foundation on 2026-10-29.
   Windows builds now carry PE metadata; after approval, enable the signing steps
   from docs/CODE_SIGNING.md.

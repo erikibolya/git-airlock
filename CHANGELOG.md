@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.7.4 — 2026-10-29
+
+- The Windows worker runs from `airlock-worker.exe`, a GUI-subsystem build of
+  the same code. Task Scheduler starts it without ever creating a console
+  window; portable installs without that file fall back to
+  `airlock.exe worker --hidden`, so nothing flashes every minute.
+- The tray's **Repositories…** entry now opens the repository picker instead of
+  showing the dashboard again, and **Open dashboard** always returns to the
+  dashboard.
+- The native menu is consolidated into **File** (Dashboard, Repositories…,
+  Manual, Logs, Sync now, Quit) and **Help**. The confusing **View** submenu is
+  gone.
+
 ## 1.7.3 — 2026-10-29
 
 - Windows builds carry PE metadata: `installer/winres.json` is rendered by
