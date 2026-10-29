@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.8.0 — 2026-10-29
+
+- Native-looking redesign of the dashboard and repository picker: 13px Segoe UI,
+  the light/dark palette from RedLine, a compact 52px header, flat 8px panels,
+  status pills and badges, restrained form controls and a 30px status bar. The
+  page layout is unchanged.
+- Show the window before executing navigation JS; WebView2 can drop
+  ExecuteScript while hidden, which made tray **Repositories…** look like it
+  opened the dashboard.
+
 ## 1.7.4 — 2026-10-29
 
 - The Windows worker runs from `airlock-worker.exe`, a GUI-subsystem build of

@@ -71,6 +71,9 @@
 - **v1.7.4** — the worker runs from `airlock-worker.exe`, a GUI-subsystem build
   with no console window; the tray **Repositories…** entry opens the picker,
   and the native menu is consolidated into File + Help.
+- **v1.8.0** — native-looking redesign of the dashboard and repository picker
+  using the RedLine visual language: 13px Segoe UI, light/dark palette, compact
+  header and status bar, flat panels, pills and restrained controls.
 
 ## Next
 
