@@ -80,12 +80,12 @@ func (d *Dashboard) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := pageData{
-		Title:       "Repositories",
-		CSRF:        d.csrf,
-		Now:         time.Now(),
-		AutoRefresh: true,
-		AuthMode:    authLabel(d.token),
-		RepoCount:   len(d.repos),
+		Title:     "Repositories",
+		CSRF:      d.csrf,
+		Now:       time.Now(),
+		AuthMode:  authLabel(d.token),
+		RepoCount: len(d.repos),
+		Desktop:   isDesktopRequest(r),
 	}
 	data.RepoCountText = reposText(data.RepoCount)
 	for _, repo := range d.repos {
@@ -131,6 +131,9 @@ func (d *Dashboard) handleIndex(w http.ResponseWriter, r *http.Request) {
 		data.StatusTitle = "All clear"
 		data.StatusSub = data.RepoCountText + " watched. Everything is synced."
 	}
+	// Only poll while something is in flight. An idle dashboard used to reload
+	// itself every minute, which could interrupt a navigation.
+	data.AutoRefresh = data.ActiveCount > 0 || data.WaitingCount > 0
 	d.render(w, "repos", data)
 }
 
@@ -143,6 +146,7 @@ func (d *Dashboard) handleRepositories(w http.ResponseWriter, r *http.Request) {
 		Now:       time.Now(),
 		AuthMode:  authLabel(d.token),
 		RepoCount: len(d.repos),
+		Desktop:   isDesktopRequest(r),
 	}
 	data.RepoCountText = reposText(data.RepoCount)
 	for _, repo := range d.repos {
