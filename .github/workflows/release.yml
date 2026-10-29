@@ -54,7 +54,9 @@ jobs:
             # Embed PE metadata and keep the symbols: anonymous, stripped
             # binaries score worse with Defender's ML heuristics.
             version="${VERSION#v}"
-            go run github.com/tc-hib/go-winres@v0.3.3 make --in installer/winres.json --arch "${GOARCH}" --out cmd/airlock/rsrc --product-version "$version" --file-version "$version"
+            # go run builds the generator for the host; GOOS/GOARCH are set to
+            # windows for this job, so override them for the tool only.
+            GOOS=linux GOARCH=amd64 go run github.com/tc-hib/go-winres@v0.3.3 make --in installer/winres.json --arch "${GOARCH}" --out cmd/airlock/rsrc --product-version "$version" --file-version "$version"
             ldflags="-X main.version=${VERSION}"
           fi
           go build -trimpath -ldflags "$ldflags" -o "dist/${bin}" ./cmd/airlock
