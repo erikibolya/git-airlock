@@ -3,7 +3,6 @@ package ui
 import (
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,7 +20,7 @@ func testConfig(t *testing.T) *config.Config {
 	}
 }
 
-func TestDashboardAndEnqueue(t *testing.T) {
+func TestDashboard(t *testing.T) {
 	cfg := testConfig(t)
 	s, err := New(cfg, "")
 	if err != nil {
@@ -45,24 +44,8 @@ func TestDashboardAndEnqueue(t *testing.T) {
 
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/manual", nil))
-	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "Queue open PR") {
-		t.Fatalf("GET /manual = %d", rr.Code)
-	}
-
-	form := url.Values{"csrf": {s.csrf}, "head": {"feature"}, "base": {"main"}, "merge": {"when-green"}, "strategy": {"squash"}}
-	req := httptest.NewRequest(http.MethodPost, "/pr/open", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr = httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusSeeOther {
-		t.Fatalf("POST /pr/open = %d (%s)", rr.Code, rr.Body.String())
-	}
-	pending, err := queue.New(cfg.Queue).Pending()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(pending) != 1 || pending[0].Head != "feature" || pending[0].Merge != "when-green" || pending[0].Strategy != "squash" {
-		t.Fatalf("unexpected pending: %+v", pending)
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/" {
+		t.Fatalf("GET /manual = %d, location %q", rr.Code, rr.Header().Get("Location"))
 	}
 }
 
@@ -123,22 +106,6 @@ func TestAuth(t *testing.T) {
 	}
 }
 
-func TestCSRF(t *testing.T) {
-	cfg := testConfig(t)
-	s, err := New(cfg, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	form := url.Values{"csrf": {"wrong"}, "head": {"feature"}, "base": {"main"}}
-	req := httptest.NewRequest(http.MethodPost, "/pr/open", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rr := httptest.NewRecorder()
-	s.Handler().ServeHTTP(rr, req)
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("bad csrf = %d", rr.Code)
-	}
-}
-
 func TestDashboardListsRepos(t *testing.T) {
 	cfgA := testConfig(t)
 	cfgA.Repo = "owner/one"
@@ -183,12 +150,15 @@ func TestDashboardListsRepos(t *testing.T) {
 	}
 
 	rr = httptest.NewRecorder()
-	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/repo/owner-one/manual", nil))
-	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "/repo/owner-one/pr/open") {
-		t.Fatalf("manual page = %d (%s)", rr.Code, rr.Body.String())
-	}
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/repo/owner-one/", nil))
 	if !strings.Contains(rr.Body.String(), "manual-result-visible") {
-		t.Fatalf("manual page does not render results: %s", rr.Body.String())
+		t.Fatalf("detail page does not render results: %s", rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/repo/owner-one/manual", nil))
+	if rr.Code != http.StatusSeeOther || rr.Header().Get("Location") != "/repo/owner-one/" {
+		t.Fatalf("manual redirect = %d, location %q", rr.Code, rr.Header().Get("Location"))
 	}
 
 	rr = httptest.NewRecorder()
