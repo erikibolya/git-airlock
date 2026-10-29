@@ -81,6 +81,9 @@
 - **v1.8.2** — the repository picker edits a draft list; **Save and open
   dashboard** persists it and updates the worker, while **Cancel** restores the
   running repositories.
+- **v1.8.3** — the dashboard is read-only: the Manual page and its menu entry
+  are gone, along with the form POST endpoints. Use the CLI for PR actions and
+  the tray/File **Sync now** for an immediate sync.
 
 ## Next
 

@@ -80,7 +80,7 @@ scoop install git-airlock/git-airlock
 
 The winget manifest for `ErikIbolya.GitAirlock` is in
 [microsoft/winget-pkgs#464029](https://github.com/microsoft/winget-pkgs/pull/464029)
-(still in Microsoft review as of 1.8.2); once merged, install it with
+(still in Microsoft review as of 1.8.3); once merged, install it with
 `winget install ErikIbolya.GitAirlock`. The manifests are generated from
 [`packaging/`](packaging).
 
@@ -217,14 +217,13 @@ The dashboard opens on a **repository list** with the worker state (idle,
 working, or waiting for CI), the repositories it watches, pending counts and
 last activity. Click a repository for its **overview**: state with an activity
 bar, mirror and base branch, requests in progress with their checks, and recent
-activity. Pages refresh themselves every minute. Manual actions (open/check/
-merge PR, immediate sync) live on a separate **manual** page, because automatic
-pull requests handle normal work.
+activity. Pages refresh themselves while work is in flight. The dashboard is
+read-only: pull-request actions are the CLI (`airlock pr open|status|merge`) and
+auto PR; **Sync now** in the desktop tray/File menu (or `airlock sync`) handles
+an immediate sync.
 **logs** shows that repository's worker log (one file per mirror under the cache directory).
 
-It never holds the API token and never calls the git host: buttons only write
-requests to the queue, exactly like the CLI. (The manual *Sync now* button is the
-exception; like `airlock sync`, it runs on the machine showing the dashboard.)
+It never holds the API token and never calls the git host.
 
 **Localhost vs LAN.** The default bind is `127.0.0.1:8787`, so only the computer
 running the UI can open it. To view it from another device on your network:
@@ -278,8 +277,8 @@ on the VPN-connected worker.
 Windows, WebKitGTK on Linux, WKWebView on macOS): no browser tab, no local
 server to keep running. It reads the same configs and queues as the CLI, adds a
 notification-area icon with **Open dashboard**, **Repositories…**, **Sync now**
-and **Quit**, a native **File / Help** menu (Dashboard, Repositories…, Manual,
-Logs, Sync now, Quit, Check for updates…, GitHub, About), and hides to
+and **Quit**, a native **File / Help** menu (Dashboard, Repositories…, Logs,
+Sync now, Quit, Check for updates…, GitHub, About), and hides to
 the tray when you close the window. The tray menu also shows the latest worker
 result (click it to open the dashboard) and the tooltip follows it; it refreshes
 every 30 seconds. Merged or failed requests raise a native notification: a
