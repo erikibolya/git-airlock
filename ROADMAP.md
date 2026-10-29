@@ -81,8 +81,10 @@ missing.
 
 ### Code signing and update polish
 
-The Windows installer is unsigned, so SmartScreen and Defender's ML heuristics
-can warn about it. Authenticode signing would remove that friction. Possible
+The Windows binaries are unsigned while the SignPath Foundation application is
+pending (submitted 2026-10-29), so SmartScreen and Defender's ML heuristics can
+warn about them. After approval the release workflow signs the executables and
+the installer; see [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md). Possible
 follow-ups: a three-button update prompt (Install / Later / Skip this version),
 release-channel selection (stable/beta) and an in-app update banner instead of
 a native dialog.

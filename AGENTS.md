@@ -122,9 +122,17 @@ branch cleanup. It needs network access to pull images.
   "Install now / Later" and has no "Skip".
 - Wails logs a `Chromium.Focus` "parameter is incorrect" stack when a dialog is
   opened during startup; it is non-fatal and does not stop the app.
-- Unsigned Inno installers can be flagged by Defender as
-  `Trojan:Win32/Bearfoos.B!ml` (false positive). Verify SHA256 and the Ed25519
-  signature before trusting a download; code signing is on the roadmap.
+- Unsigned Windows binaries can be quarantined by Defender as
+  `Trojan:Win32/Bearfoos.B!ml` (false positive). The worker then fails in
+  `worker.vbs` with `0x800700E1` and later `0x80070002`. Verify SHA256 and the
+  Ed25519 signature before trusting a download; recovery steps and the SignPath
+  signing plan are in [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md).
+- Windows builds carry PE metadata (`installer/winres.json` for the CLI, the
+  `info` block in `desktop/wails.json` for the app) and are not stripped on
+  purpose. Do not remove the metadata; SignPath requires it and it reduces
+  Defender false positives.
+- `installer/build.ps1` stamps `info.productVersion` from `-Version`; a bare
+  `wails build` keeps the `0.0.0` placeholder.
 - When replacing `airlock.exe` on Windows, stop the scheduled task first
   ("text file busy"). The task name is `Git Airlock`.
 
@@ -148,14 +156,17 @@ branch cleanup. It needs network access to pull images.
 - Latest release: **v1.7.2** (tray icon stays responsive; systray loop pinned to
   one OS thread). Homebrew tap and Scoop bucket are updated; the Linux
   `.bin/airlock` still runs 1.7.1, which is fine because the CLI did not change.
-- The Windows box runs 1.7.1 and is offered 1.7.2 by the in-app updater; the
-  scheduled worker task `Git Airlock` is active.
+- The Windows box runs 1.7.1 and was offered 1.7.2. Defender then quarantined
+  the new `airlock.exe` (false positive), so the worker is stopped until the
+  exclusion/restore is done; see docs/CODE_SIGNING.md. The scheduled worker task
+  `Git Airlock` is defined and runs every minute.
+- Code signing: application submitted to SignPath Foundation on 2026-10-29.
+  Windows builds now carry PE metadata; after approval, enable the signing steps
+  from docs/CODE_SIGNING.md.
 - winget: the 1.6.0 package PR (#464029) is still in Microsoft review. The
   1.7.2 manifests are rendered; submit the update once it merges.
-- Known distribution issue: the unsigned installer can trigger Defender's
-  `Trojan:Win32/Bearfoos.B!ml` ML false positive. Code signing is the fix.
-- Open roadmap items: Authenticode signing, Linux deb/rpm packages, labels and
-  review automation, optional in-app update banner.
+- Open roadmap items: SignPath code signing (pending approval), Linux deb/rpm
+  packages, labels and review automation, optional in-app update banner.
 
 ## Testing checklist before a release
 

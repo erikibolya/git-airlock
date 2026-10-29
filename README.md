@@ -473,6 +473,45 @@ Airlock is not a sandbox. If the isolated machine is compromised, it can still
 push malicious commits to the mirror and request PRs. Fast-forward-only sync and
 CI gating limit the damage; review is still your job.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/). **Status:** the project was
+submitted to SignPath Foundation on 2026-10-29; Windows releases stay unsigned
+until the application is approved.
+
+This is a single-maintainer project, so one person holds every role:
+
+| Role | Responsibility | Member |
+| --- | --- | --- |
+| Author | commits and merges to `main` | [Erik Ibolya](https://github.com/erikibolya) |
+| Reviewer | reviews pull requests | Erik Ibolya |
+| Approver | approves each signing request | Erik Ibolya |
+
+Releases are built from this repository by GitHub Actions
+([`.github/workflows/release.yml`](.github/workflows/release.yml)); only artifacts
+produced by that workflow are submitted for signing. The build order, artifact
+configuration and workflow steps are in
+[docs/CODE_SIGNING.md](docs/CODE_SIGNING.md).
+
+**Privacy:** Git Airlock has no telemetry and collects nothing. It connects only
+to systems you configure: your Git provider (GitHub, GitLab or Gitea) to sync
+branches and manage pull requests, optionally an SSH host for `queue_remote`,
+and — from the Windows desktop app on every start — `github.com` to check for
+updates. Set `AIRLOCK_UPDATE_URL` to check a different URL, or run a development
+build (`main.version == "dev"`), to skip the update check.
+
+## Antivirus false positives (Windows)
+
+While releases are unsigned, Defender's ML heuristics occasionally quarantine the
+Windows binaries as `Trojan:Win32/Bearfoos.B!ml`. Typical symptoms are a
+`worker.vbs` error `0x800700E1` ("the file contains a virus or potentially
+unwanted software") and then `0x80070002` once the executable has been
+quarantined. This is a false positive: verify the installer against the published
+SHA256 and the Ed25519 signature in `latest.json`, then follow
+[docs/CODE_SIGNING.md](docs/CODE_SIGNING.md#defender-false-positives) to restore
+the file or add an exclusion.
+
 ## Scheduling
 
 | OS | Mechanism | Notes |
@@ -495,9 +534,11 @@ system.
   the UIs are conveniences.
 - Automatic updates run on Windows only. Homebrew, Scoop and winget users
   upgrade through their package manager.
-- The Windows installer is not Authenticode-signed yet, so SmartScreen and
-  occasional Defender ML heuristics may warn about it. The updater still verifies
-  the Ed25519 signature and SHA256 of every download.
+- Windows binaries are not Authenticode-signed while the SignPath Foundation
+  application is pending, so SmartScreen and occasional Defender ML heuristics
+  may warn about them. The updater still verifies the Ed25519 signature and
+  SHA256 of every download. See
+  [Code signing policy](#code-signing-policy).
 - See [ROADMAP.md](ROADMAP.md) for labels, code signing and Linux packages.
 
 ## Development

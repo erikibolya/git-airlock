@@ -55,6 +55,12 @@ The desktop job needs the `UPDATE_SIGNING_KEY` secret; it signs
 `dist/latest.json` with the installer's SHA256. A missing or wrong secret fails
 the job before the release is created.
 
+If SignPath signing is enabled (see [CODE_SIGNING.md](CODE_SIGNING.md)), the
+workflow stops at the signing requests until an approver releases them in the
+SignPath UI: first the two executables, then the installer. `latest.json` is
+generated from the signed installer, so approve both requests before the release
+job runs.
+
 ## 4. Verify the release
 
 ```bash
@@ -74,6 +80,13 @@ Check the manifest by running the previous installed version:
 It must print the new version, `update available`, and a SHA256 matching
 `sha256sum GitAirlockSetup-$VERSION.exe`. The startup check and
 **Help → Check for updates…** use the same code.
+
+Once SignPath signing is enabled, verify the Authenticode signature too:
+
+```powershell
+Get-AuthenticodeSignature .\GitAirlockSetup-$VERSION.exe | Format-List
+Get-AuthenticodeSignature "$env:LOCALAPPDATA\Programs\Git Airlock\airlock.exe" | Format-List
+```
 
 ## 5. Update package managers
 
@@ -150,10 +163,11 @@ so a manifest signed by an unknown key is rejected.
 
 ## Known distributions caveats
 
-- The Windows installer is not Authenticode-signed. SmartScreen may warn and
-  Defender occasionally flags recent Inno Setup builds as
-  `Trojan:Win32/Bearfoos.B!ml` (false positive). Verify the published SHA256
-  and the update signature; code signing is the long-term fix.
+- Windows binaries are not Authenticode-signed until SignPath approves the
+  project (see [CODE_SIGNING.md](CODE_SIGNING.md)), so SmartScreen may warn and
+  Defender occasionally quarantines recent builds as
+  `Trojan:Win32/Bearfoos.B!ml` (false positive). Verify the published SHA256 and
+  the update signature, then follow the recovery steps in CODE_SIGNING.md.
 - The updater only runs on Windows. Homebrew, Scoop and winget users upgrade
   through their package manager; macOS/Linux builds of the desktop app show the
   release page instead.
