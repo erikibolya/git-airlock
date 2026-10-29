@@ -85,7 +85,7 @@ func main() {
 		MinHeight:        600,
 		StartHidden:      app.startHidden,
 		AssetServer:      &assetserver.Options{Handler: app},
-		BackgroundColour: &options.RGBA{R: 246, G: 248, B: 251, A: 1},
+		BackgroundColour: &options.RGBA{R: 238, G: 242, B: 247, A: 1},
 		OnStartup:        app.startup,
 		OnBeforeClose:    app.beforeClose,
 		OnShutdown:       app.shutdown,
@@ -506,51 +506,84 @@ const setupHTML = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Git Airlock — repositories</title>
 <style>
-  :root { color-scheme: light; }
-  body { margin:0; font:15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background:#f6f8fb; color:#0f172a; }
-  main { max-width:760px; margin:0 auto; padding:48px 24px; }
-  h1 { font-size:26px; margin:0 0 4px; }
-  .sub { color:#475569; margin:0 0 28px; }
-  .card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:24px; box-shadow:0 1px 2px rgba(15,23,42,.05); }
-  label { display:block; font-weight:600; font-size:13px; margin-bottom:6px; }
-  button { padding:10px 16px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; font:600 13px system-ui; cursor:pointer; }
-  button:hover { background:#f1f5f9; }
-  button.primary { background:#2563eb; border-color:#2563eb; color:#fff; }
-  button.primary:hover { background:#1d4ed8; }
-  .actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
-  .status { margin-top:14px; font-size:13px; min-height:20px; }
-  .status.err { color:#b91c1c; }
-  .status.ok { color:#047857; }
-  .hint { margin-top:22px; font-size:13px; color:#64748b; }
-  code { background:#f1f5f9; padding:1px 5px; border-radius:4px; }
-  .msg { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:10px; padding:12px 14px; font-size:13px; margin-bottom:20px; white-space:pre-wrap; word-break:break-word; }
-  ul.repos { list-style:none; margin:0; padding:0; }
-  ul.repos li { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid #e2e8f0; }
-  ul.repos li:last-child { border-bottom:0; }
-  ul.repos code { font-size:12px; word-break:break-all; }
-  button.remove { border:0; background:none; color:#b91c1c; padding:4px 6px; font-size:12px; }
-  button.remove:hover { background:#fef2f2; }
-  .empty { color:#64748b; font-size:13px; margin:0; }
+  :root{
+    color-scheme:light;
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --bg:#eef2f7;--panel:#fff;--panel-2:#f6f8fb;--panel-3:#e9eef5;
+    --border:#d5dde8;--border-soft:#e4eaf2;
+    --text:#1e293b;--muted:#64748b;
+    --accent:#0369a1;--accent-soft:#bae6fd;
+    --ok:#16a34a;--danger:#e11d48;
+    --err-bg:#fee2e2;--err-fg:#991b1b;--err-bd:#fecaca;
+    --radius:8px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      color-scheme:dark;
+      --bg:#0d1117;--panel:#151a21;--panel-2:#1b222b;--panel-3:#232c37;
+      --border:#2a3441;--border-soft:#222a34;
+      --text:#e6edf3;--muted:#8b98a8;
+      --accent:#2f81f7;--accent-soft:#1f4fa0;
+      --ok:#22c55e;--danger:#fb7185;
+      --err-bg:#2a1115;--err-fg:#fda4af;--err-bd:#7f1d1d;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;flex-direction:column;font:13px/1.45 var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+  header{display:flex;align-items:center;gap:9px;height:52px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--border)}
+  .brand-mark{width:24px;height:24px;border-radius:6px;background:var(--panel-3);border:1px solid var(--border);color:var(--text);display:grid;place-items:center;font:700 9px/1 var(--font);letter-spacing:.03em;flex:none}
+  .brand-copy{display:flex;flex-direction:column;line-height:1.2}
+  .brand-copy b{font-size:13px;font-weight:600}
+  .brand-copy span{font-size:11px;color:var(--muted)}
+  main{width:100%;max-width:720px;margin:0 auto;padding:24px 20px;flex:1}
+  h1{font-size:15px;font-weight:600;margin:0 0 3px;color:var(--text)}
+  .sub{color:var(--muted);margin:0 0 18px;font-size:12px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+  label{display:block;font-size:10px;font-weight:600;color:var(--muted);margin:0 0 8px;text-transform:uppercase;letter-spacing:.05em}
+  button{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:6px 11px;border-radius:7px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;margin:0}
+  button:hover{background:var(--panel-3)}
+  button:active{transform:translateY(1px)}
+  button.primary{background:var(--ok);border-color:var(--ok);color:#fff;font-weight:600}
+  button.primary:hover{background:#15803d;border-color:#15803d}
+  .actions{display:flex;gap:8px;margin-top:14px}
+  .actions.end{justify-content:flex-end;border-top:1px solid var(--border-soft);padding-top:14px;margin-top:16px}
+  .status{margin-top:12px;font-size:12px;min-height:18px;color:var(--muted)}
+  .status.err{color:var(--danger)}
+  .status.ok{color:var(--ok)}
+  .hint{margin:14px 0 0;font-size:11.5px;color:var(--muted)}
+  code{background:var(--panel-2);border:1px solid var(--border-soft);border-radius:4px;padding:0 4px;font:11.5px/1.5 var(--mono);color:var(--text)}
+  .msg{background:var(--panel-2);border:1px solid var(--border-soft);color:var(--muted);border-radius:var(--radius);padding:10px 12px;font-size:12px;margin-bottom:14px;white-space:pre-wrap;word-break:break-word}
+  ul.repos{list-style:none;margin:0;padding:0}
+  ul.repos li{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-soft)}
+  ul.repos li:last-child{border-bottom:0}
+  ul.repos code{font-size:11.5px;word-break:break-all}
+  button.remove{border-color:transparent;background:transparent;color:var(--danger);padding:4px 6px;font-size:12px}
+  button.remove:hover{background:var(--err-bg);border-color:var(--err-bd)}
+  .empty{color:var(--muted);font-size:12.5px;margin:0 0 4px}
 </style>
 </head>
 <body>
+<header>
+  <span class="brand-mark" aria-hidden="true">GA</span>
+  <span class="brand-copy"><b>Git Airlock</b><span>Repositories</span></span>
+</header>
 <main>
-  <h1>Git Airlock</h1>
-  <p class="sub">Synchronises mirrors across the air gap and merges pull requests.</p>
+  <h1>Repositories</h1>
+  <p class="sub">Repositories watched by this dashboard and the scheduled worker.</p>
   <div class="msg">{{MSG}}</div>
   <div class="card">
-    <label>Repositories</label>
+    <label>Configured repositories</label>
     {{LIST}}
-    <div class="actions" style="justify-content:flex-start;margin-top:14px">
+    <div class="actions">
       <button id="add">Add config…</button>
     </div>
-    <div class="actions">
+    <div class="actions end">
       {{CANCEL}}
       <button id="start" class="primary">Open dashboard</button>
     </div>
     <div id="status" class="status"></div>
-    <p class="hint">The scheduled worker is pointed at the same list, so these repositories are
-    watched every minute. Create a config with <code>airlock init</code>.</p>
+    <p class="hint">The scheduled worker watches the same list. Create a config with <code>airlock init</code>.</p>
   </div>
 </main>
 <script>
