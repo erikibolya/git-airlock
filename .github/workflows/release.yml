@@ -145,8 +145,14 @@ jobs:
             dist/latest.json
             dist/checksums.txt
           generate_release_notes: true
-          append_body: |
-            **Code signing policy:** free code signing provided by
-            [SignPath.io](https://signpath.io/), certificate by
-            [SignPath Foundation](https://signpath.org/). Details and the
-            signing status: [docs/CODE_SIGNING.md](https://github.com/erikibolya/git-airlock/blob/main/docs/CODE_SIGNING.md).
+      - name: Add code signing policy to the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json body --jq .body)
+          footer='**Code signing policy:** free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/). Details: [docs/CODE_SIGNING.md](https://github.com/erikibolya/git-airlock/blob/main/docs/CODE_SIGNING.md).'
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --notes "$body
+
+          ---
+
+          $footer"
