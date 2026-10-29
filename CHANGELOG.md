@@ -9,6 +9,11 @@
   makes the executables look less like anonymous malware to Defender's ML
   heuristics, which have been quarantining the unsigned worker as
   `Trojan:Win32/Bearfoos.B!ml` (false positive).
+- The Windows scheduled task starts `airlock.exe worker --hidden` directly
+  instead of going through `worker.vbs`. The worker hides its own console, so
+  there is no console flash and no Windows Script Host error dialog every
+  minute; upgrades remove the old launcher. The task definition no longer
+  contains a hidden script + scheduled task pattern for AV heuristics to score.
 - Added a code signing policy and the SignPath Foundation setup guide in
   [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md); the application was submitted on
   2026-10-29 and releases stay unsigned until it is approved.

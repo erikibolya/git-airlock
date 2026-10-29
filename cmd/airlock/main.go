@@ -573,8 +573,12 @@ func cmdWorker(ctx context.Context, args []string) error {
 	fs.Var(&configs, "config", "config path (repeatable)")
 	noSync := fs.Bool("no-sync", false, "skip the mirror sync")
 	loop := fs.Duration("loop", 0, "run forever with this interval (0 = once)")
+	hidden := fs.Bool("hidden", false, "hide the console window (set by the scheduled task)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *hidden {
+		hideConsole()
 	}
 
 	paths := []string(configs)

@@ -123,10 +123,13 @@ branch cleanup. It needs network access to pull images.
 - Wails logs a `Chromium.Focus` "parameter is incorrect" stack when a dialog is
   opened during startup; it is non-fatal and does not stop the app.
 - Unsigned Windows binaries can be quarantined by Defender as
-  `Trojan:Win32/Bearfoos.B!ml` (false positive). The worker then fails in
-  `worker.vbs` with `0x800700E1` and later `0x80070002`. Verify SHA256 and the
-  Ed25519 signature before trusting a download; recovery steps and the SignPath
-  signing plan are in [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md).
+  `Trojan:Win32/Bearfoos.B!ml` (false positive). Up to 1.7.2 the task ran through
+  `worker.vbs`, so the failure showed as a WSH dialog with `0x800700E1`, then
+  `0x80070002` once the exe was quarantined. 1.7.3+ runs
+  `airlock.exe worker --hidden` directly; failures are only in Task Scheduler
+  history. Verify SHA256 and the Ed25519 signature before trusting a download;
+  recovery steps and the SignPath signing plan are in
+  [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md).
 - Windows builds carry PE metadata (`installer/winres.json` for the CLI, the
   `info` block in `desktop/wails.json` for the app) and are not stripped on
   purpose. Do not remove the metadata; SignPath requires it and it reduces

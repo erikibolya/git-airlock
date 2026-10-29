@@ -68,6 +68,11 @@ Type: files; Name: "{localappdata}\git-airlock\worker.vbs"
 Type: files; Name: "{localappdata}\git-airlock\worker-task.xml"
 Type: files; Name: "{userappdata}\git-airlock\desktop.json"
 
+[InstallDelete]
+; Pre-1.7.3 installs launched the worker through a VBS wrapper.
+Type: files; Name: "{localappdata}\git-airlock\worker.vbs"
+Type: files; Name: "{localappdata}\git-airlock\worker-task.xml"
+
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
 var
