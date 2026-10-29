@@ -48,10 +48,16 @@ jobs:
           name="airlock-${GOOS}-${GOARCH}"
           mkdir -p dist
           bin="airlock"
+          ldflags="-s -w -X main.version=${VERSION}"
           if [ "$GOOS" = "windows" ]; then
             bin="airlock.exe"
+            # Embed PE metadata and keep the symbols: anonymous, stripped
+            # binaries score worse with Defender's ML heuristics.
+            version="${VERSION#v}"
+            go run github.com/tc-hib/go-winres@v0.3.3 make --in installer/winres.json --arch "${GOARCH}" --out cmd/airlock/rsrc --product-version "$version" --file-version "$version"
+            ldflags="-X main.version=${VERSION}"
           fi
-          go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "dist/${bin}" ./cmd/airlock
+          go build -trimpath -ldflags "$ldflags" -o "dist/${bin}" ./cmd/airlock
           cp README.md LICENSE dist/
           if [ "$GOOS" = "windows" ]; then
             (cd dist && zip -q -r "${name}.zip" "${bin}" README.md LICENSE)
@@ -78,6 +84,13 @@ jobs:
           go-version: "stable"
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
+      - name: Stamp desktop version
+        shell: pwsh
+        run: |
+          $path = Join-Path $env:GITHUB_WORKSPACE "desktop/wails.json"
+          $json = Get-Content $path -Raw | ConvertFrom-Json
+          $json.info.productVersion = "${{ github.ref_name }}".TrimStart("v")
+          [System.IO.File]::WriteAllText($path, ($json | ConvertTo-Json -Depth 10))
       - name: Build desktop app
         working-directory: desktop
         run: wails build -clean -platform windows/amd64 -ldflags "-X main.version=${{ github.ref_name }}"
@@ -130,3 +143,8 @@ jobs:
             dist/latest.json
             dist/checksums.txt
           generate_release_notes: true
+          append_body: |
+            **Code signing policy:** free code signing provided by
+            [SignPath.io](https://signpath.io/), certificate by
+            [SignPath Foundation](https://signpath.org/). Details and the
+            signing status: [docs/CODE_SIGNING.md](https://github.com/erikibolya/git-airlock/blob/main/docs/CODE_SIGNING.md).
