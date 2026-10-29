@@ -105,7 +105,7 @@ func (c *Config) applyDefaults() {
 		c.Base = "main"
 	}
 	if c.Merge == "" {
-		c.Merge = "when-green"
+		c.Merge = "never"
 	}
 	if c.MergeStrategy == "" {
 		c.MergeStrategy = "merge"

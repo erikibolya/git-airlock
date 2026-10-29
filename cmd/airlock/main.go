@@ -210,7 +210,7 @@ func cmdInit(args []string) error {
 	baseFlag := fs.String("base", "", "default PR target branch")
 	mirrorFlag := fs.String("mirror", "", "bare mirror path")
 	queueFlag := fs.String("queue", "", "shared queue directory")
-	mergeFlag := fs.String("merge", "when-green", "default merge policy")
+	mergeFlag := fs.String("merge", "never", "default merge policy")
 	strategyFlag := fs.String("strategy", "merge", "merge method: merge, squash or rebase")
 	deleteBranch := fs.Bool("delete-branch", false, "delete the source branch after merging")
 	configure := fs.Bool("configure-git", false, "create the mirror and repoint git remotes")
