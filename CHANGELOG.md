@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.2 — 2026-10-29
+
+- The desktop tray icon no longer goes dead. The systray message loop was started
+  in a goroutine the Go scheduler is free to move between OS threads; Windows
+  delivers the icon's clicks to the thread that created it, so after a migration
+  the icon stayed visible but left and right clicks were ignored until the app
+  restarted. The tray goroutine is now pinned to one thread with
+  `runtime.LockOSThread()`. Tooltip updates are also held back until the icon
+  exists instead of racing tray start-up.
+
 ## 1.7.1 — 2026-10-28
 
 - Fix the repository picker: **Open dashboard**, **Add config…**, **remove** and

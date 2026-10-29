@@ -62,6 +62,9 @@
 - **v1.7.1** — the repository picker uses same-origin HTTP endpoints instead of
   Wails bindings (which the server-rendered pages do not load), fixing
   **Open dashboard**, **Add config…**, **remove** and **Cancel**.
+- **v1.7.2** — the tray icon keeps answering clicks: the systray message loop is
+  pinned to one OS thread, and tooltip updates wait for the icon instead of
+  racing tray start-up.
 
 ## Next
 

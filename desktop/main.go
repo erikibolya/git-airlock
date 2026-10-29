@@ -121,6 +121,7 @@ type App struct {
 	ctx        context.Context
 	quitting   atomic.Bool
 	tray       atomic.Bool
+	tip        atomic.Value
 	syncMu     sync.Mutex
 	syncItem   *systray.MenuItem
 	statusItem *systray.MenuItem
@@ -584,6 +585,14 @@ const setupHTML = `<!doctype html>
 // ---------- tray ----------
 
 func (a *App) startTray() {
+	// The tray is a Win32 window: Windows delivers its mouse and menu messages
+	// only to the thread that created it. Go may move a goroutine between OS
+	// threads, and once that happens the message loop sits on a thread that
+	// receives nothing, so the icon stays visible but stops answering clicks
+	// until the app restarts (getlantern/systray#269). Pin the goroutine.
+	goruntime.LockOSThread()
+	defer goruntime.UnlockOSThread()
+
 	iconFile := "tray.png"
 	if goruntime.GOOS == "windows" {
 		iconFile = "tray.ico"
@@ -593,6 +602,16 @@ func (a *App) startTray() {
 		return
 	}
 	systray.Run(func() { a.onReady(icon) }, func() {})
+}
+
+// setTooltip updates the icon tooltip. The result watcher can run before the
+// tray exists, and Shell_NotifyIcon panics on a nil icon, so the message is
+// kept until onReady applies it.
+func (a *App) setTooltip(msg string) {
+	a.tip.Store(msg)
+	if a.tray.Load() {
+		systray.SetTooltip(msg)
+	}
 }
 
 func (a *App) onReady(icon []byte) {
@@ -613,6 +632,9 @@ func (a *App) onReady(icon []byte) {
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "Quit Git Airlock")
 	a.tray.Store(true)
+	if tip, _ := a.tip.Load().(string); tip != "" {
+		systray.SetTooltip(tip)
+	}
 
 	go func() {
 		for {
@@ -647,14 +669,14 @@ func (a *App) syncNow() {
 	if box == nil {
 		return
 	}
-	systray.SetTooltip("Git Airlock: syncing…")
+	a.setTooltip("Git Airlock: syncing…")
 	var parts []string
 	for _, cfg := range box.cfgs {
 		report, err := reposync.Sync(context.Background(), cfg)
 		parts = append(parts, cfg.Repo+": "+syncMessage(report, err))
 	}
 	msg := join(parts)
-	systray.SetTooltip(truncate("Git Airlock: "+msg, 120))
+	a.setTooltip(truncate("Git Airlock: "+msg, 120))
 }
 
 func syncMessage(r gitutil.SyncReport, err error) string {
