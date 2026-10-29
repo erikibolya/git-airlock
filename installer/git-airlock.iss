@@ -1,6 +1,6 @@
 #define AppName "Git Airlock"
 #ifndef AppVersion
-  #define AppVersion "1.8.2"
+  #define AppVersion "1.8.3"
 #endif
 #define AppPublisher "Erik Ibolya"
 #define AppExe "airlock-desktop.exe"

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.8.3 — 2026-10-29
+
+- Removed the **Manual** page and its File menu entry. The dashboard is
+  read-only: use `airlock pr open|status|merge` for exceptions, auto PR for the
+  normal path, and the tray/File **Sync now** (or `airlock sync`) for an
+  immediate sync. `/manual` redirects to the repository overview.
+- Removed the dashboard's form POST endpoints (`/pr/open`, `/pr/status`,
+  `/pr/merge`, `/sync`) and CSRF handling, so the web UI can no longer mutate
+  the queue. The result, logs and repository pages remain.
+
 ## 1.8.2 — 2026-10-29
 
 - The repository picker edits a draft list: **Add config…** and **remove** no
