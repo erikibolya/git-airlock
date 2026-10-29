@@ -14,7 +14,7 @@ provider = "gitea"                   # gitea | github | gitlab
 api      = "https://gitea.example.com/api/v1"
 ca       = ""
 base     = "main"
-merge    = "when-green"
+merge    = "never"
 
 # GitHub:
 # provider = "github"

@@ -79,3 +79,11 @@ func TestResolveWalksUp(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestDefaultMergePolicyIsNever(t *testing.T) {
+	var c Config
+	c.applyDefaults()
+	if c.Merge != "never" {
+		t.Fatalf("default merge = %q, want never", c.Merge)
+	}
+}

@@ -338,7 +338,7 @@ provider = "gitea"                   # gitea | github | gitlab
 api      = "https://gitea.example.com/api/v1"
 ca       = ""                        # optional PEM bundle
 base     = "main"                    # default PR target
-merge    = "when-green"              # never | when-green | now
+merge    = "never"                   # never | when-green | now
 merge_strategy = "merge"             # merge | squash | rebase
 # mirror_remote = "ssh://user@host/path/repo.git"  # SSH-only worker
 # remote_url    = "https://gitea.example.com/owner/name.git"
@@ -410,12 +410,13 @@ already has the private remote configured, `remote_url` can be omitted.
 
 ## How merging works
 
-`pr open` (default `--merge when-green`):
+`pr open` (default `--merge never`):
 
 1. find an open PR for `head -> base`, or create one;
-2. read the PR's CI status;
-3. merge only on `success`; `pending` leaves the request queued and the worker
-   retries every minute; `failure` finalises the request with an error.
+2. with `never`, stop there and let the remote's native auto-merge handle it;
+3. with `when-green`, read the PR's CI status and merge only on `success`;
+   `pending` leaves the request queued and the worker retries every minute;
+   `failure` finalises the request with an error.
 
 The merge method is `merge_strategy` (or `--strategy` on `pr open` and
 `pr merge`): `merge`, `squash` or `rebase`. Gitea and GitHub support all three;
@@ -442,11 +443,11 @@ use `--merge never` or `--merge now` explicitly.
 Set `auto_pr = true` and every worker run opens a PR for each local branch in the
 mirror that is ahead of `base` and has no open PR yet. The branch tip's commit
 subject becomes the title, and the PR merges according to `merge` (normally
-`when-green`). Pushing a branch is then enough:
+`never`, so the remote can auto-merge it). Pushing a branch is then enough:
 
 ```bash
 git push origin feature/login        # into the mirror, no VPN needed
-# worker: opens feature/login -> main, waits for CI, merges
+# worker: opens feature/login -> main; remote auto-merges after CI
 ```
 
 Rules:
@@ -470,8 +471,8 @@ Rules:
   repository come from the config, not from the request.
 - Requests are plain JSON files; the queue directory must be writable by both
   sides but readable only by trusted users.
-- Merge happens only after green checks (`when-green`); `now` is an explicit
-  human override.
+- Merge happens only after green checks (`when-green`) when that fallback is chosen;
+  `never` lets the remote auto-merge. `now` is an explicit human override.
 - The workstation can veto a merge by closing the PR.
 
 Airlock is not a sandbox. If the isolated machine is compromised, it can still
