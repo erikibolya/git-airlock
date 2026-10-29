@@ -732,9 +732,13 @@ func (a *App) syncNow() {
 	defer a.syncMu.Unlock()
 	box := a.current.Load()
 	if box == nil {
+		a.showWindow()
+		a.toast("Sync: no repositories configured.", false, true)
 		notify("Git Airlock", "Sync: no repositories configured.")
 		return
 	}
+	a.showWindow()
+	a.toast("Syncing mirrors…", true, false)
 	a.setTooltip("Git Airlock: syncing…")
 	// Tell the user if a sync takes noticeably long; a fast one only reports
 	// the result below, so there is no toast spam.
@@ -746,15 +750,42 @@ func (a *App) syncNow() {
 		case <-done:
 		}
 	}()
+	failed := false
 	var parts []string
 	for _, cfg := range box.cfgs {
 		report, err := reposync.Sync(context.Background(), cfg)
+		if err != nil {
+			failed = true
+		}
 		parts = append(parts, cfg.Repo+": "+syncMessage(report, err))
 	}
 	close(done)
 	msg := join(parts)
 	a.setTooltip(truncate("Git Airlock: "+msg, 120))
+	a.toast("Sync: "+msg, false, failed)
 	notify("Git Airlock", truncate("Sync: "+msg, 200))
+}
+
+// toast shows a small banner inside the webview. Manual actions such as Sync
+// now must report back even when Windows notifications are disabled.
+func (a *App) toast(msg string, sticky, failed bool) {
+	if a.ctx == nil {
+		return
+	}
+	bg, bd, fg := "var(--ok-bg,#dcfce7)", "var(--ok-bd,#bbf7d0)", "var(--ok-fg,#166534)"
+	if failed {
+		bg, bd, fg = "var(--err-bg,#fee2e2)", "var(--err-bd,#fecaca)", "var(--err-fg,#991b1b)"
+	}
+	css := "position:fixed;right:16px;bottom:42px;z-index:99;max-width:420px;padding:9px 12px;border-radius:8px;" +
+		"background:" + bg + ";border:1px solid " + bd + ";color:" + fg + ";" +
+		`font:13px/1.4 "Segoe UI",system-ui,sans-serif;box-shadow:0 8px 24px rgba(15,23,42,.16);white-space:pre-wrap;`
+	hide := "el.style.display='block';el._timer=setTimeout(function(){el.style.display='none';},5000);"
+	if sticky {
+		hide = "el.style.display='block';if(el._timer){clearTimeout(el._timer);el._timer=null;}"
+	}
+	js := fmt.Sprintf(`(function(){try{var id='airlock-toast';var el=document.getElementById(id);if(!el){el=document.createElement('div');el.id=id;document.body.appendChild(el);}el.textContent=%s;el.style.cssText=%s;%s}catch(e){}})()`,
+		strconv.Quote(msg), strconv.Quote(css), hide)
+	wailsruntime.WindowExecJS(a.ctx, js)
 }
 
 func syncMessage(r gitutil.SyncReport, err error) string {
