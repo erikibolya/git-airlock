@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.6 — 2026-10-29
+
+- Left-clicking the tray icon opens the dashboard; the tray menu is now on
+  right-click. The tray uses the maintained `fyne.io/systray` fork, which
+  reports the two mouse buttons separately.
+
 ## 1.8.5 — 2026-10-29
 
 - **Sync now** brings the window forward and shows an in-app banner

@@ -88,6 +88,8 @@
   the Help menu.
 - **v1.8.5** — **Sync now** shows an in-app banner and brings the window forward;
   the Logs page scrolls as one window instead of using an inner scrollbar.
+- **v1.8.6** — left-clicking the tray icon opens the dashboard; the tray menu
+  moved to right-click.
 
 ## Next
 
