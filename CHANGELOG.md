@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.4 — 2026-10-29
+
+- The tray menu has **Check for updates…**, matching **Help → Check for
+  updates…**. It shows the window and runs the same signed-manifest check.
+
 ## 1.8.3 — 2026-10-29
 
 - Removed the **Manual** page and its File menu entry. The dashboard is
