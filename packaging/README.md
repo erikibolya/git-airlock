@@ -61,7 +61,7 @@ Validate locally with `winget validate --manifest <dir>` and submit with
 winget install Microsoft.WingetCreate
 wingetcreate submit --manifest <dir>
 # later releases
-wingetcreate update ErikIbolya.GitAirlock -v 1.7.1 -u <installer-url> --submit
+wingetcreate update ErikIbolya.GitAirlock -v 1.7.2 -u <installer-url> --submit
 ```
 
 The installer is Inno Setup, per-user, and keeps an existing `.airlock.toml` on

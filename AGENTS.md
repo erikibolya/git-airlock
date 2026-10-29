@@ -58,13 +58,13 @@ Desktop module (Go 1.25+, Windows needs WebView2, `wails` on PATH):
 ```bash
 cd desktop
 go vet ./...
-wails build -ldflags "-X main.version=1.7.1"
+wails build -ldflags "-X main.version=1.7.2"
 ```
 
 Installer, CLI and desktop in one step (Windows):
 
 ```powershell
-pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Project\.airlock.windows.toml -Version v1.7.1
+pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Project\.airlock.windows.toml -Version v1.7.2
 ```
 
 Integration test (Docker Compose v2):
@@ -143,13 +143,15 @@ branch cleanup. It needs network access to pull images.
   `/path/to/repos/.bin/airlock` (update it from the release
   archive after each version).
 
-## Current status (2026-10-28)
+## Current status (2026-10-29)
 
-- Latest release: **v1.7.1** (signed in-app updater + repository picker fix).
-  Homebrew tap, Scoop bucket and the Linux `.bin/airlock` are updated.
-- The Windows box runs 1.7.1; the scheduled worker task `Git Airlock` is active.
+- Latest release: **v1.7.2** (tray icon stays responsive; systray loop pinned to
+  one OS thread). Homebrew tap and Scoop bucket are updated; the Linux
+  `.bin/airlock` still runs 1.7.1, which is fine because the CLI did not change.
+- The Windows box runs 1.7.1 and is offered 1.7.2 by the in-app updater; the
+  scheduled worker task `Git Airlock` is active.
 - winget: the 1.6.0 package PR (#464029) is still in Microsoft review. The
-  1.7.1 manifests are already rendered; submit an update after the merge.
+  1.7.2 manifests are rendered; submit the update once it merges.
 - Known distribution issue: the unsigned installer can trigger Defender's
   `Trojan:Win32/Bearfoos.B!ml` ML false positive. Code signing is the fix.
 - Open roadmap items: Authenticode signing, Linux deb/rpm packages, labels and
