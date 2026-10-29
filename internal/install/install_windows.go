@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"unicode/utf16"
 )
 
@@ -46,13 +47,9 @@ func installWindows(o Options) error {
 	// Remove the old launcher; the task no longer points at it.
 	_ = os.Remove(filepath.Join(dir, "worker.vbs"))
 
-	cmd := exec.Command("schtasks", "/create", "/tn", o.Name, "/xml", xmlPath, "/f")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		// Fall back to a direct /tr invocation. It fails on some Windows
-		// builds when the command contains quotes, but it is worth trying.
-		return fmt.Errorf("schtasks: %w", err)
+	out, err := hiddenCommand("schtasks", "/create", "/tn", o.Name, "/xml", xmlPath, "/f").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("schtasks: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	fmt.Printf("installed scheduled task %q (every %d minute(s))\n", o.Name, minutes)
 	return nil
@@ -70,7 +67,7 @@ func writeUTF16(path, body string) error {
 }
 
 func statusWindows(name string) (string, error) {
-	out, err := exec.Command("schtasks", "/query", "/tn", name, "/fo", "list", "/v").Output()
+	out, err := hiddenCommand("schtasks", "/query", "/tn", name, "/fo", "list", "/v").Output()
 	if err != nil {
 		return "not installed", nil
 	}
@@ -81,4 +78,13 @@ func statusWindows(name string) (string, error) {
 		}
 	}
 	return "unknown", nil
+}
+
+// hiddenCommand runs a console tool without creating a console window. The
+// desktop app is GUI-subsystem, so schtasks would otherwise flash a console
+// when Start updates the worker task.
+func hiddenCommand(name string, args ...string) *exec.Cmd {
+	cmd := exec.Command(name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000} // CREATE_NO_WINDOW
+	return cmd
 }

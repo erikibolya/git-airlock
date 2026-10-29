@@ -57,6 +57,10 @@
   footer{margin-top:auto;padding:6px 16px;background:var(--panel);border-top:1px solid var(--border);color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   h2{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
+  h2.page-title{font-size:15px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--text);margin:0 0 4px}
+  h3{font-size:12.5px;font-weight:600;color:var(--text);margin:0 0 8px}
+  h4{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:14px 0 4px}
+  .divider{border-top:1px solid var(--border-soft);margin:16px 0 0}
   main>h2:first-child,main>section>h2:first-child{margin-top:0}
   .muted{color:var(--muted)}
   .ok{color:var(--ok);font-weight:600}
@@ -66,7 +70,7 @@
 
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
   .card h2{margin:0 0 10px}
-  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-bottom:16px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin-bottom:16px;align-items:start}
   .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-bottom:16px;align-items:start}
 
   .status{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;position:relative;overflow:hidden}
@@ -153,10 +157,10 @@
       <span>{{if .Config}}{{if .BasePath}}all repositories · {{end}}{{.Config.Repo}} · {{.Config.Provider}}{{if .Config.AutoPR}} · auto PR{{end}}{{else}}{{.RepoCountText}} watched · {{.AuthMode}}{{end}}</span>
     </span>
   </a>
-  <nav>
+  {{if not .Desktop}}<nav>
     {{if .BasePath}}<a href="{{.BasePath}}">Overview</a><a href="{{.BasePath}}manual">Manual</a><a href="{{.BasePath}}logs">Logs</a>{{end}}
     <a href="/repositories">Repositories</a>
-  </nav>
+  </nav>{{end}}
 </header>
 <main>
 {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}

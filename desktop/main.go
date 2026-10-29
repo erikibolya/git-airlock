@@ -150,6 +150,10 @@ func buildBox(paths []string) (*dashBox, error) {
 // ServeHTTP is the Wails asset handler. The repository picker takes over while
 // setupMode is set or until at least one config loads.
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Hide the in-page navigation in the desktop window; the native menu
+	// already has Dashboard, Repositories, Manual and Logs.
+	r.Header.Set("X-Airlock-Desktop", "1")
+
 	// The picker is plain HTML served by us, not the generated Wails frontend,
 	// so it cannot use window.go bindings. These endpoints back its buttons.
 	if strings.HasPrefix(r.URL.Path, "/_airlock/") {
@@ -188,13 +192,24 @@ func (a *App) startup(ctx context.Context) {
 	a.startUpdateCheck()
 }
 
-// navigate moves the webview to a dashboard path without reloading the app.
+// navigate moves the webview to a dashboard path without showing the window
+// first; the native menu can only be used while the window is already visible.
 func (a *App) navigate(target string) {
+	a.navigateTo(target, false)
+}
+
+// navigateFromTray is used when the window may be hidden. Show it before the
+// JS runs; WebView2 can drop ExecuteScript on a hidden window.
+func (a *App) navigateFromTray(target string) {
+	a.navigateTo(target, true)
+}
+
+func (a *App) navigateTo(target string, show bool) {
 	setup := target == "/repositories"
 	a.setupMode.Store(setup)
-	// Show the window before running JS: WebView2 can drop ExecuteScript
-	// calls while the window is hidden, which made the tray menu look dead.
-	a.showWindow()
+	if show {
+		a.showWindow()
+	}
 	if a.ctx != nil {
 		wailsruntime.WindowExecJS(a.ctx, "window.location.assign("+strconv.Quote(target)+")")
 	}
@@ -689,9 +704,9 @@ func (a *App) onReady(icon []byte) {
 		for {
 			select {
 			case <-mOpen.ClickedCh:
-				a.navigate("/")
+				a.navigateFromTray("/")
 			case <-mRepos.ClickedCh:
-				a.navigate("/repositories")
+				a.navigateFromTray("/repositories")
 			case <-mStatus.ClickedCh:
 				a.showWindow()
 			case <-mSync.ClickedCh:
@@ -709,16 +724,29 @@ func (a *App) syncNow() {
 	defer a.syncMu.Unlock()
 	box := a.current.Load()
 	if box == nil {
+		notify("Git Airlock", "Sync: no repositories configured.")
 		return
 	}
 	a.setTooltip("Git Airlock: syncing…")
+	// Tell the user if a sync takes noticeably long; a fast one only reports
+	// the result below, so there is no toast spam.
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-time.After(2 * time.Second):
+			notify("Git Airlock", "Syncing mirrors…")
+		case <-done:
+		}
+	}()
 	var parts []string
 	for _, cfg := range box.cfgs {
 		report, err := reposync.Sync(context.Background(), cfg)
 		parts = append(parts, cfg.Repo+": "+syncMessage(report, err))
 	}
+	close(done)
 	msg := join(parts)
 	a.setTooltip(truncate("Git Airlock: "+msg, 120))
+	notify("Git Airlock", truncate("Sync: "+msg, 200))
 }
 
 func syncMessage(r gitutil.SyncReport, err error) string {

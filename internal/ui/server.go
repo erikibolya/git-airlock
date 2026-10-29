@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/erikibolya/git-airlock/internal/config"
@@ -43,6 +44,11 @@ type Server struct {
 	token    string
 	basePath string
 	authMode string
+
+	cacheMu  sync.Mutex
+	cacheAt  time.Time
+	cacheVal repoSummary
+	cacheErr error
 }
 
 // New builds a dashboard. An empty token disables authentication (meant for
@@ -139,6 +145,7 @@ type pageData struct {
 	Now         time.Time
 	BasePath    string
 	AutoRefresh bool
+	Desktop     bool
 
 	// Overview page.
 	PendingItems []pendingItem
@@ -205,7 +212,7 @@ type activityItem struct {
 	URL     string
 }
 
-func (s *Server) baseData(title string) pageData {
+func (s *Server) baseData(r *http.Request, title string) pageData {
 	mode := "directory"
 	if s.cfg.Queue == "git" {
 		mode = "git refs"
@@ -217,7 +224,14 @@ func (s *Server) baseData(title string) pageData {
 			authMode = "token protected"
 		}
 	}
-	return pageData{Title: title, Config: s.cfg, CSRF: s.csrf, QueueMode: mode, AuthMode: authMode, BasePath: s.basePath, Now: time.Now()}
+	return pageData{Title: title, Config: s.cfg, CSRF: s.csrf, QueueMode: mode, AuthMode: authMode, BasePath: s.basePath, Now: time.Now(), Desktop: isDesktopRequest(r)}
+}
+
+// isDesktopRequest reports whether the page is being served inside the Wails
+// window. The desktop app sets this header; the native menu already provides
+// navigation there, so the in-page nav is hidden.
+func isDesktopRequest(r *http.Request) bool {
+	return r.Header.Get("X-Airlock-Desktop") == "1"
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data pageData) {
@@ -238,14 +252,14 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sum, err := s.summary()
-	data := s.baseData("Overview")
-	data.AutoRefresh = true
+	data := s.baseData(r, "Overview")
 	data.Flash = r.URL.Query().Get("flash")
 	if err != nil {
 		data.Error = err.Error()
 		s.render(w, "overview", data)
 		return
 	}
+	data.AutoRefresh = sum.Active || sum.Waiting
 	data.PendingItems = sum.PendingItems
 	data.Activity = sum.Activity
 	data.Active = sum.Active
@@ -258,15 +272,44 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "overview", data)
 }
 
-// summary reads the queue once and derives the state shown on both the
-// repository list and the detail page.
+// summary returns a short-lived cached snapshot. Navigating between pages
+// should not re-run git for the same queue state; the cache is invalidated by
+// the request forms below.
 func (s *Server) summary() (repoSummary, error) {
+	s.cacheMu.Lock()
+	if !s.cacheAt.IsZero() && time.Since(s.cacheAt) < 3*time.Second {
+		val, err := s.cacheVal, s.cacheErr
+		s.cacheMu.Unlock()
+		return val, err
+	}
+	s.cacheMu.Unlock()
+
+	val, err := s.readSummary()
+	s.cacheMu.Lock()
+	s.cacheVal, s.cacheErr, s.cacheAt = val, err, time.Now()
+	s.cacheMu.Unlock()
+	return val, err
+}
+
+func (s *Server) invalidateSummary() {
+	s.cacheMu.Lock()
+	s.cacheAt = time.Time{}
+	s.cacheMu.Unlock()
+}
+
+// readSummary reads the queue once and derives the state shown on both the
+// repository list and the detail page.
+func (s *Server) readSummary() (repoSummary, error) {
 	var sum repoSummary
 	pending, err := s.store.Pending()
 	if err != nil {
 		return sum, err
 	}
 	results, _ := s.store.ListResults(25)
+	byID := make(map[string]queue.Result, len(results))
+	for _, res := range results {
+		byID[res.ID] = res
+	}
 	sum.Active = len(pending) > 0
 
 	for _, req := range pending {
@@ -276,7 +319,13 @@ func (s *Server) summary() (repoSummary, error) {
 			Detail:  "queued; the worker picks it up within a minute",
 			Since:   ageText(idTime(req.ID)),
 		}
-		if res, err := s.store.ReadResult(req.ID); err == nil && res != nil {
+		if res, ok := byID[req.ID]; ok {
+			item.Detail = res.Message
+			item.Checks = res.Checks
+			item.PR = res.PR
+			item.Pending = res.Pending
+		} else if res, err := s.store.ReadResult(req.ID); err == nil && res != nil {
+			// The result is older than the 25 shown in activity.
 			item.Detail = res.Message
 			item.Checks = res.Checks
 			item.PR = res.PR
@@ -335,7 +384,7 @@ func (s *Server) summary() (repoSummary, error) {
 func (s *Server) handleManual(w http.ResponseWriter, r *http.Request) {
 	pending, _ := s.store.Pending()
 	results, _ := s.store.ListResults(10)
-	data := s.baseData("Manual")
+	data := s.baseData(r, "Manual")
 	data.Pending = pending
 	data.Results = results
 	data.Flash = r.URL.Query().Get("flash")
@@ -473,6 +522,7 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, "queue: "+err.Error())
 		return
 	}
+	s.invalidateSummary()
 	s.flash(w, r, fmt.Sprintf("queued %s (open %s -> %s)", id, head, base))
 }
 
@@ -494,6 +544,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, "queue: "+err.Error())
 		return
 	}
+	s.invalidateSummary()
 	s.flash(w, r, fmt.Sprintf("queued %s (status #%d)", id, number))
 }
 
@@ -533,6 +584,7 @@ func (s *Server) handleMerge(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, "queue: "+err.Error())
 		return
 	}
+	s.invalidateSummary()
 	s.flash(w, r, fmt.Sprintf("queued %s (merge #%d, %s)", id, number, merge))
 }
 
@@ -574,15 +626,15 @@ func (s *Server) handleResult(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data := s.baseData("Result")
+	data := s.baseData(r, "Result")
 	data.Result = res
 	data.ResultJSON = pretty(res)
 	s.render(w, "result", data)
 }
 
-func (s *Server) handleLogs(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	logs, err := s.store.TailLog(250)
-	data := s.baseData("Logs")
+	data := s.baseData(r, "Logs")
 	if err != nil {
 		data.Error = err.Error()
 	}
