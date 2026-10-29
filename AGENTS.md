@@ -159,12 +159,14 @@ branch cleanup. It needs network access to pull images.
 
 ## Current status (2026-10-29)
 
-- Latest release: **v1.8.5** (Sync now in-app feedback, full-window logs).
-  Homebrew tap and Scoop bucket are updated; the Linux `.bin/airlock` still runs
-  1.7.1, which is fine because the CLI did not change.
-- The Windows box runs 1.7.3 with the Defender exclusion; install 1.8.5 for the
-  redesign, the GUI worker (no console popups) and the tray/menu fixes. The
-  scheduled task `Git Airlock` is defined and runs every minute.
+- Latest release: **v1.8.7** (tray left-click opens the dashboard; signed dev
+  builds and revert to stable). Homebrew tap and Scoop bucket are updated; the
+  Linux `.bin/airlock` still runs 1.7.1, which is fine because the CLI did not
+  change.
+- `dev` is the integration branch. Pushes that touch code publish a rolling
+  `dev` prerelease with a signed `dev.json`; merge to `main` and tag only with
+  the human's approval. The Windows box tested `1.8.7-dev.2` before the stable
+  release.
 - Code signing: application submitted to SignPath Foundation on 2026-10-29.
   Windows builds now carry PE metadata; after approval, enable the signing steps
   from docs/CODE_SIGNING.md.

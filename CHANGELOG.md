@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.8.7 — 2026-10-29
 
 - **Install latest dev build…** and **Revert to last stable version…** are in
   the Help menu and the tray menu. Dev builds come from the signed rolling

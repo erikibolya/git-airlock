@@ -90,6 +90,9 @@
   the Logs page scrolls as one window instead of using an inner scrollbar.
 - **v1.8.6** — left-clicking the tray icon opens the dashboard; the tray menu
   moved to right-click.
+- **v1.8.7** — **Install latest dev build…** and **Revert to last stable
+  version…** in the Help and tray menus. Dev builds come from the signed
+  rolling `dev` prerelease; version comparison understands pre-releases.
 
 ## Next
 
