@@ -151,7 +151,7 @@ func buildBox(paths []string) (*dashBox, error) {
 // setupMode is set or until at least one config loads.
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Hide the in-page navigation in the desktop window; the native menu
-	// already has Dashboard, Repositories, Manual and Logs.
+	// already has Dashboard, Repositories and Logs.
 	r.Header.Set("X-Airlock-Desktop", "1")
 
 	// The picker is plain HTML served by us, not the generated Wails frontend,
@@ -285,7 +285,6 @@ func (a *App) menu() *menu.Menu {
 	file.AddText("Dashboard", nil, func(*menu.CallbackData) { a.navigate("/") })
 	file.AddText("Repositories…", nil, func(*menu.CallbackData) { a.navigate("/repositories") })
 	file.AddSeparator()
-	file.AddText("Manual", nil, func(*menu.CallbackData) { a.navigateRepo("manual") })
 	file.AddText("Logs", nil, func(*menu.CallbackData) { a.navigateRepo("logs") })
 	file.AddSeparator()
 	file.AddText("Sync now", nil, func(*menu.CallbackData) { go a.syncNow() })

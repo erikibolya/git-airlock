@@ -20,7 +20,6 @@ type Repo struct {
 // one Server each. It owns authentication for the whole tree.
 type Dashboard struct {
 	token string
-	csrf  string
 	repos []*Repo
 }
 
@@ -29,7 +28,7 @@ func NewDashboard(cfgs []*config.Config, accessToken string) (*Dashboard, error)
 	if len(cfgs) == 0 {
 		return nil, fmt.Errorf("at least one config is required")
 	}
-	d := &Dashboard{token: accessToken, csrf: NewAccessToken()}
+	d := &Dashboard{token: accessToken}
 	seen := map[string]int{}
 	for _, cfg := range cfgs {
 		slug := config.Slug(cfg.Repo)
@@ -81,7 +80,6 @@ func (d *Dashboard) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	data := pageData{
 		Title:     "Repositories",
-		CSRF:      d.csrf,
 		Now:       time.Now(),
 		AuthMode:  authLabel(d.token),
 		RepoCount: len(d.repos),
@@ -142,7 +140,6 @@ func (d *Dashboard) handleIndex(w http.ResponseWriter, r *http.Request) {
 func (d *Dashboard) handleRepositories(w http.ResponseWriter, r *http.Request) {
 	data := pageData{
 		Title:     "Repositories",
-		CSRF:      d.csrf,
 		Now:       time.Now(),
 		AuthMode:  authLabel(d.token),
 		RepoCount: len(d.repos),

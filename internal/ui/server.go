@@ -11,17 +11,12 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/erikibolya/git-airlock/internal/config"
-	"github.com/erikibolya/git-airlock/internal/proc"
-	"github.com/erikibolya/git-airlock/internal/provider"
 	"github.com/erikibolya/git-airlock/internal/queue"
-	"github.com/erikibolya/git-airlock/internal/reposync"
 )
 
 //go:embed templates/*.html
@@ -30,7 +25,7 @@ var templateFS embed.FS
 var pages = map[string]*template.Template{}
 
 func init() {
-	for _, name := range []string{"repos", "repositories", "overview", "manual", "result", "logs"} {
+	for _, name := range []string{"repos", "repositories", "overview", "result", "logs"} {
 		pages[name] = template.Must(template.ParseFS(templateFS, "templates/layout.html", "templates/"+name+".html"))
 	}
 }
@@ -40,7 +35,6 @@ func init() {
 type Server struct {
 	cfg      *config.Config
 	store    queue.Store
-	csrf     string
 	token    string
 	basePath string
 	authMode string
@@ -61,7 +55,7 @@ func New(cfg *config.Config, accessToken string) (*Server, error) {
 	if err := store.Ensure(); err != nil {
 		return nil, err
 	}
-	return &Server{cfg: cfg, store: store, csrf: NewAccessToken(), token: accessToken}, nil
+	return &Server{cfg: cfg, store: store, token: accessToken}, nil
 }
 
 // NewAccessToken returns a random URL-safe token.
@@ -77,11 +71,13 @@ func NewAccessToken() string {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleOverview)
-	mux.HandleFunc("/manual", s.handleManual)
-	mux.HandleFunc("/pr/open", s.handleOpen)
-	mux.HandleFunc("/pr/status", s.handleStatus)
-	mux.HandleFunc("/pr/merge", s.handleMerge)
-	mux.HandleFunc("/sync", s.handleSync)
+	mux.HandleFunc("/manual", func(w http.ResponseWriter, r *http.Request) {
+		target := s.basePath
+		if target == "" {
+			target = "/"
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
+	})
 	mux.HandleFunc("/result/", s.handleResult)
 	mux.HandleFunc("/logs", s.handleLogs)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -132,11 +128,8 @@ func headers(next http.Handler) http.Handler {
 type pageData struct {
 	Title       string
 	Config      *config.Config
-	CSRF        string
 	Flash       string
 	Error       string
-	Pending     []queue.Request
-	Results     []queue.Result
 	Result      *queue.Result
 	ResultJSON  string
 	Logs        string
@@ -224,7 +217,7 @@ func (s *Server) baseData(r *http.Request, title string) pageData {
 			authMode = "token protected"
 		}
 	}
-	return pageData{Title: title, Config: s.cfg, CSRF: s.csrf, QueueMode: mode, AuthMode: authMode, BasePath: s.basePath, Now: time.Now(), Desktop: isDesktopRequest(r)}
+	return pageData{Title: title, Config: s.cfg, QueueMode: mode, AuthMode: authMode, BasePath: s.basePath, Now: time.Now(), Desktop: isDesktopRequest(r)}
 }
 
 // isDesktopRequest reports whether the page is being served inside the Wails
@@ -379,18 +372,6 @@ func (s *Server) readSummary() (repoSummary, error) {
 	return sum, nil
 }
 
-// handleManual renders the explicit request forms. Most work is handled by
-// auto_pr, so this is an exception page.
-func (s *Server) handleManual(w http.ResponseWriter, r *http.Request) {
-	pending, _ := s.store.Pending()
-	results, _ := s.store.ListResults(10)
-	data := s.baseData(r, "Manual")
-	data.Pending = pending
-	data.Results = results
-	data.Flash = r.URL.Query().Get("flash")
-	s.render(w, "manual", data)
-}
-
 func requestLabel(req queue.Request) string {
 	switch req.Action {
 	case queue.ActionOpen:
@@ -468,153 +449,6 @@ func ageText(t time.Time) string {
 	}
 }
 
-func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !s.formOK(w, r) {
-		return
-	}
-	head := strings.TrimSpace(r.FormValue("head"))
-	base := strings.TrimSpace(r.FormValue("base"))
-	if base == "" {
-		base = s.cfg.Base
-	}
-	if head == "" {
-		s.flash(w, r, "head branch is required")
-		return
-	}
-	if head == base {
-		s.flash(w, r, "head and base must differ")
-		return
-	}
-	merge := r.FormValue("merge")
-	if merge != "never" && merge != "when-green" && merge != "now" {
-		merge = s.cfg.Merge
-	}
-	strategy := r.FormValue("strategy")
-	if strategy == "" {
-		strategy = s.cfg.MergeStrategy
-	}
-	if _, ok := provider.NormalizeMergeStrategy(strategy); !ok {
-		s.flash(w, r, fmt.Sprintf("unknown merge strategy %q", strategy))
-		return
-	}
-	headSHA := ""
-	if out, err := proc.Command("git", "-C", s.cfg.Mirror, "rev-parse", "refs/heads/"+head).Output(); err == nil {
-		headSHA = strings.TrimSpace(string(out))
-	}
-	req := &queue.Request{
-		Action:       queue.ActionOpen,
-		Head:         head,
-		HeadSHA:      headSHA,
-		Base:         base,
-		Title:        strings.TrimSpace(r.FormValue("title")),
-		Body:         strings.TrimSpace(r.FormValue("body")),
-		Merge:        merge,
-		Strategy:     strategy,
-		DeleteBranch: r.FormValue("delete_branch") != "" || s.cfg.DeleteBranch,
-		DryRun:       r.FormValue("dry_run") != "",
-	}
-	id, err := s.store.Enqueue(req)
-	if err != nil {
-		s.flash(w, r, "queue: "+err.Error())
-		return
-	}
-	s.invalidateSummary()
-	s.flash(w, r, fmt.Sprintf("queued %s (open %s -> %s)", id, head, base))
-}
-
-func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !s.formOK(w, r) {
-		return
-	}
-	number := formNumber(r, "number")
-	if number <= 0 {
-		s.flash(w, r, "PR number is required")
-		return
-	}
-	id, err := s.store.Enqueue(&queue.Request{Action: queue.ActionStatus, Number: number})
-	if err != nil {
-		s.flash(w, r, "queue: "+err.Error())
-		return
-	}
-	s.invalidateSummary()
-	s.flash(w, r, fmt.Sprintf("queued %s (status #%d)", id, number))
-}
-
-func (s *Server) handleMerge(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !s.formOK(w, r) {
-		return
-	}
-	number := formNumber(r, "number")
-	if number <= 0 {
-		s.flash(w, r, "PR number is required")
-		return
-	}
-	merge := "now"
-	if r.FormValue("when_green") != "" {
-		merge = "when-green"
-	}
-	strategy := r.FormValue("strategy")
-	if strategy == "" {
-		strategy = s.cfg.MergeStrategy
-	}
-	if _, ok := provider.NormalizeMergeStrategy(strategy); !ok {
-		s.flash(w, r, fmt.Sprintf("unknown merge strategy %q", strategy))
-		return
-	}
-	id, err := s.store.Enqueue(&queue.Request{
-		Action:       queue.ActionMerge,
-		Number:       number,
-		Merge:        merge,
-		Strategy:     strategy,
-		DeleteBranch: r.FormValue("delete_branch") != "" || s.cfg.DeleteBranch,
-	})
-	if err != nil {
-		s.flash(w, r, "queue: "+err.Error())
-		return
-	}
-	s.invalidateSummary()
-	s.flash(w, r, fmt.Sprintf("queued %s (merge #%d, %s)", id, number, merge))
-}
-
-func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !s.formOK(w, r) {
-		return
-	}
-	report, err := reposync.Sync(r.Context(), s.cfg)
-	var parts []string
-	if len(report.Pushed) > 0 {
-		parts = append(parts, "pushed "+strings.Join(report.Pushed, ", "))
-	}
-	if len(report.FastForwarded) > 0 {
-		parts = append(parts, "fast-forwarded "+strings.Join(report.FastForwarded, ", "))
-	}
-	if len(report.Diverged) > 0 {
-		parts = append(parts, "DIVERGED "+strings.Join(report.Diverged, ", "))
-	}
-	if err != nil {
-		parts = append(parts, "error: "+err.Error())
-	} else if len(parts) == 0 {
-		parts = append(parts, "already up to date")
-	}
-	s.flash(w, r, "sync: "+strings.Join(parts, "; "))
-}
-
 func (s *Server) handleResult(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/result/")
 	if id == "" || strings.Contains(id, "/") {
@@ -640,30 +474,6 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Logs = logs
 	s.render(w, "logs", data)
-}
-
-func (s *Server) formOK(w http.ResponseWriter, r *http.Request) bool {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form", http.StatusBadRequest)
-		return false
-	}
-	if !tokenEqual(r.FormValue("csrf"), s.csrf) {
-		http.Error(w, "invalid csrf token", http.StatusForbidden)
-		return false
-	}
-	return true
-}
-
-func (s *Server) flash(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, s.basePath+"manual?flash="+url.QueryEscape(msg), http.StatusSeeOther)
-}
-
-func formNumber(r *http.Request, name string) int {
-	n, err := strconv.Atoi(strings.TrimSpace(r.FormValue(name)))
-	if err != nil || n <= 0 {
-		return 0
-	}
-	return n
 }
 
 func pretty(v any) string {
