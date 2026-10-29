@@ -377,7 +377,6 @@ func (a *App) AddConfig() PickResult {
 	}
 	a.paths = append(a.paths, path)
 	a.loadErrs = nil
-	_ = saveConfigs(a.paths)
 	return PickResult{Path: path}
 }
 
@@ -393,7 +392,6 @@ func (a *App) RemoveConfig(path string) PickResult {
 	}
 	a.paths = out
 	a.loadErrs = nil
-	_ = saveConfigs(a.paths)
 	return PickResult{}
 }
 
@@ -425,9 +423,13 @@ func (a *App) Start() PickResult {
 	return PickResult{}
 }
 
-// Cancel returns to the dashboard when one is already configured.
+// Cancel discards the draft repository list and returns to the dashboard.
 func (a *App) Cancel() {
-	if a.current.Load() != nil {
+	if box := a.current.Load(); box != nil {
+		a.mu.Lock()
+		a.paths = append([]string(nil), box.paths...)
+		a.loadErrs = nil
+		a.mu.Unlock()
 		a.setupMode.Store(false)
 	}
 }
@@ -595,7 +597,7 @@ const setupHTML = `<!doctype html>
     </div>
     <div class="actions end">
       {{CANCEL}}
-      <button id="start" class="primary">Open dashboard</button>
+      <button id="start" class="primary">Save and open dashboard</button>
     </div>
     <div id="status" class="status"></div>
     <p class="hint">The scheduled worker watches the same list. Create a config with <code>airlock init</code>.</p>
@@ -626,7 +628,7 @@ const setupHTML = `<!doctype html>
     });
   }
   document.getElementById('start').addEventListener('click', function () {
-    say('Checking…');
+    say('Saving…');
     call('/_airlock/start').then(function (r) {
       if (r && r.error) { say(r.error, 'err'); return; }
       say('Starting…', 'ok');
