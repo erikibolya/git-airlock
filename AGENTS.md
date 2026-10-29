@@ -58,13 +58,13 @@ Desktop module (Go 1.25+, Windows needs WebView2, `wails` on PATH):
 ```bash
 cd desktop
 go vet ./...
-wails build -ldflags "-X main.version=1.8.4"
+wails build -ldflags "-X main.version=1.8.5"
 ```
 
 Installer, CLI and desktop in one step (Windows):
 
 ```powershell
-pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Au.Net\.airlock.windows.toml -Version v1.8.4
+pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Au.Net\.airlock.windows.toml -Version v1.8.5
 ```
 
 Integration test (Docker Compose v2):
@@ -159,10 +159,10 @@ branch cleanup. It needs network access to pull images.
 
 ## Current status (2026-10-29)
 
-- Latest release: **v1.8.4** (tray update check).
+- Latest release: **v1.8.5** (Sync now in-app feedback, full-window logs).
   Homebrew tap and Scoop bucket are updated; the Linux `.bin/airlock` still runs
   1.7.1, which is fine because the CLI did not change.
-- The Windows box runs 1.7.3 with the Defender exclusion; install 1.8.4 for the
+- The Windows box runs 1.7.3 with the Defender exclusion; install 1.8.5 for the
   redesign, the GUI worker (no console popups) and the tray/menu fixes. The
   scheduled task `Git Airlock` is defined and runs every minute.
 - Code signing: application submitted to SignPath Foundation on 2026-10-29.

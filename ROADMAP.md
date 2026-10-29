@@ -86,6 +86,8 @@
   the tray/File **Sync now** for an immediate sync.
 - **v1.8.4** — **Check for updates…** is available from the tray menu as well as
   the Help menu.
+- **v1.8.5** — **Sync now** shows an in-app banner and brings the window forward;
+  the Logs page scrolls as one window instead of using an inner scrollbar.
 
 ## Next
 
