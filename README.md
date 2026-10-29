@@ -152,8 +152,9 @@ Install the minute timer:
 airlock install-task --config /path/to/repo/.airlock.toml
 ```
 
-That creates a **Windows Task Scheduler** task (hidden VBS launcher), a
-**systemd user timer**, or a **launchd agent**, depending on the OS.
+That creates a **Windows Task Scheduler** task, a **systemd user timer**, or a
+**launchd agent**, depending on the OS. On Windows the task starts
+`airlock.exe worker --hidden` directly; the worker hides its own console.
 
 > The worker must run where the mirror and queue paths resolve. In the common
 > home-lab setup that is WSL/Linux next to the shared folder. Windows workers
@@ -504,11 +505,13 @@ build (`main.version == "dev"`), to skip the update check.
 ## Antivirus false positives (Windows)
 
 While releases are unsigned, Defender's ML heuristics occasionally quarantine the
-Windows binaries as `Trojan:Win32/Bearfoos.B!ml`. Typical symptoms are a
-`worker.vbs` error `0x800700E1` ("the file contains a virus or potentially
-unwanted software") and then `0x80070002` once the executable has been
-quarantined. This is a false positive: verify the installer against the published
-SHA256 and the Ed25519 signature in `latest.json`, then follow
+Windows binaries as `Trojan:Win32/Bearfoos.B!ml`. In builds up to 1.7.2 the
+scheduled task ran through `worker.vbs`, so the failure appeared as a Windows
+Script Host dialog (`0x800700E1`, then `0x80070002` once the executable was
+quarantined). 1.7.3+ starts `airlock.exe worker --hidden` directly; a blocked
+worker is then only visible in Task Scheduler. This is a false positive: verify
+the installer against the published SHA256 and the Ed25519 signature in
+`latest.json`, then follow
 [docs/CODE_SIGNING.md](docs/CODE_SIGNING.md#defender-false-positives) to restore
 the file or add an exclusion.
 
@@ -516,7 +519,7 @@ the file or add an exclusion.
 
 | OS | Mechanism | Notes |
 | --- | --- | --- |
-| Windows | Task Scheduler + hidden VBS | interactive user task, runs every minute |
+| Windows | Task Scheduler | interactive user task, runs every minute; the worker hides its own console |
 | Linux | systemd user timer | one-shot `airlock worker` |
 | macOS | launchd agent | `StartInterval` |
 

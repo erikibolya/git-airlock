@@ -3,9 +3,8 @@
 Git Airlock ships Windows executables (`airlock.exe`, `airlock-desktop.exe`,
 `GitAirlockSetup-<version>.exe`). Unsigned binaries are periodically quarantined
 by Microsoft Defender's ML heuristics as `Trojan:Win32/Bearfoos.B!ml`, which stops
-the scheduled worker (`worker.vbs` fails with `0x800700E1`, then `0x80070002` once
-the file is gone). Signing is the only reliable fix; there is no allow-list for
-unsigned software.
+the scheduled worker. Signing is the only reliable fix; there is no allow-list
+for unsigned software.
 
 ## Policy
 
@@ -148,10 +147,13 @@ binaries score worse with Defender's ML model; the size cost is a few megabytes.
 
 ## Defender false positives
 
-Symptom: `worker.vbs` reports line 5 with `0x800700E1` ("the file contains a virus
-or potentially unwanted software"), then `0x80070002` after Defender quarantines
-the executable. The worker stops running and the dialog can reappear every
-minute.
+Symptom: the worker stops running. Up to 1.7.2 the task ran through
+`worker.vbs`, so the failure appeared as a Windows Script Host dialog (`line 5`,
+`0x800700E1` "the file contains a virus or potentially unwanted software", then
+`0x80070002` after Defender quarantines the executable). 1.7.3 and later start
+`airlock.exe worker --hidden` directly, so the failure is only recorded in Task
+Scheduler (last run result) and no dialog appears. Either way, the dialog or the
+scheduler repeats every minute.
 
 1. Confirm what was flagged (PowerShell):
 
@@ -159,11 +161,14 @@ minute.
    Get-MpThreatDetection | Sort-Object InitialDetectionTime -Descending |
      Select-Object -First 5 ThreatName, Resources | Format-List
    Get-ChildItem "$env:LOCALAPPDATA\Programs\Git Airlock" | Select-Object Name, Length
-   Get-Content "$env:LOCALAPPDATA\git-airlock\worker.vbs"
    ```
 
-   The script must match the generated template (`rc = sh.Run("...\airlock.exe"
-   worker ...)` on line 5). Anything else needs investigation.
+   On builds up to 1.7.2 also check the launcher; it must match the generated
+   template (`rc = sh.Run("...\airlock.exe" worker ...)` on line 5):
+
+   ```powershell
+   Get-Content "$env:LOCALAPPDATA\git-airlock\worker.vbs"
+   ```
 
 2. Verify the release before trusting it: compare
    `Get-FileHash .\GitAirlockSetup-<version>.exe -Algorithm SHA256` with
