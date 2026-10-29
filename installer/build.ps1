@@ -11,6 +11,7 @@ param(
     [string]$Version = "",
     [string]$Wails = "",
     [switch]$SkipDesktop,
+    [switch]$SkipCLI,
     [switch]$SkipInstaller
 )
 
@@ -41,12 +42,27 @@ if (-not $SkipDesktop) {
     if (-not $wailsExe) {
         throw "wails not found. Install it with: go install github.com/wailsapp/wails/v2/cmd/wails@latest"
     }
-    Push-Location (Join-Path $root "desktop")
+    # Wails bakes Info.ProductVersion into the Windows resource. Stamp the
+    # release version so file properties, the About box and the installer agree.
+    $wailsConfig = Join-Path $root "desktop\wails.json"
+    $wailsOriginal = Get-Content $wailsConfig -Raw
     try {
-        & $wailsExe build -clean -platform windows/amd64 -ldflags "-X main.version=$Version"
-        if ($LASTEXITCODE -ne 0) { throw "wails build failed with exit code $LASTEXITCODE" }
+        $wailsJSON = $wailsOriginal | ConvertFrom-Json
+        if (-not $wailsJSON.PSObject.Properties["info"]) {
+            $wailsJSON | Add-Member -NotePropertyName info -NotePropertyValue ([pscustomobject]@{})
+        }
+        $wailsJSON.info | Add-Member -NotePropertyName productVersion -NotePropertyValue $Version -Force
+        [System.IO.File]::WriteAllText($wailsConfig, ($wailsJSON | ConvertTo-Json -Depth 10))
+
+        Push-Location (Join-Path $root "desktop")
+        try {
+            & $wailsExe build -clean -platform windows/amd64 -ldflags "-X main.version=$Version"
+            if ($LASTEXITCODE -ne 0) { throw "wails build failed with exit code $LASTEXITCODE" }
+        } finally {
+            Pop-Location
+        }
     } finally {
-        Pop-Location
+        [System.IO.File]::WriteAllText($wailsConfig, $wailsOriginal)
     }
 }
 
@@ -58,12 +74,23 @@ Copy-Item $desktopExe (Join-Path $files "airlock-desktop.exe") -Force
 
 $goExe = Resolve-Command "go" @()
 if (-not $goExe) { throw "go not found on PATH." }
-Push-Location $root
-try {
-    & $goExe build -trimpath -ldflags "-s -w -X main.version=$Version" -o (Join-Path $files "airlock.exe") ./cmd/airlock
-    if ($LASTEXITCODE -ne 0) { throw "go build failed with exit code $LASTEXITCODE" }
-} finally {
-    Pop-Location
+if (-not $SkipCLI) {
+    Push-Location $root
+    try {
+        # PE metadata (company, product, version, icon, manifest) makes the
+        # binary look like normal software to Defender's ML heuristics;
+        # `go build` alone produces an anonymous executable. Symbols are kept
+        # (no -s -w) for the same reason. Both matter less once releases are
+        # code signed.
+        & $goExe run github.com/tc-hib/go-winres@v0.3.3 make --in installer/winres.json --arch amd64 --out cmd/airlock/rsrc --product-version $Version --file-version $Version
+        if ($LASTEXITCODE -ne 0) { throw "go-winres failed with exit code $LASTEXITCODE" }
+        & $goExe build -trimpath -ldflags "-X main.version=$Version" -o (Join-Path $files "airlock.exe") ./cmd/airlock
+        if ($LASTEXITCODE -ne 0) { throw "go build failed with exit code $LASTEXITCODE" }
+    } finally {
+        Pop-Location
+    }
+} elseif (-not (Test-Path (Join-Path $files "airlock.exe"))) {
+    throw "airlock.exe is missing; build the CLI first (drop -SkipCLI)."
 }
 
 if ($Config) {

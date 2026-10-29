@@ -9,5 +9,12 @@
   "author": {
     "name": "Erik Ibolya",
     "email": "erikibolya@gmail.com"
+  },
+  "info": {
+    "companyName": "Erik Ibolya",
+    "productName": "Git Airlock",
+    "productVersion": "0.0.0",
+    "copyright": "Copyright (c) 2026 Erik Ibolya",
+    "comments": "https://github.com/erikibolya/git-airlock"
   }
 }
