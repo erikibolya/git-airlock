@@ -192,10 +192,12 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) navigate(target string) {
 	setup := target == "/repositories"
 	a.setupMode.Store(setup)
+	// Show the window before running JS: WebView2 can drop ExecuteScript
+	// calls while the window is hidden, which made the tray menu look dead.
+	a.showWindow()
 	if a.ctx != nil {
 		wailsruntime.WindowExecJS(a.ctx, "window.location.assign("+strconv.Quote(target)+")")
 	}
-	a.showWindow()
 	if setup {
 		// If WebView2 drops the navigation (strict CSP pages have been known
 		// to), a reload still serves the picker: ServeHTTP returns the setup
