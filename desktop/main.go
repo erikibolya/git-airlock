@@ -16,7 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/getlantern/systray"
+	"fyne.io/systray"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/menu/keys"
@@ -654,7 +654,7 @@ func (a *App) startTray() {
 	// only to the thread that created it. Go may move a goroutine between OS
 	// threads, and once that happens the message loop sits on a thread that
 	// receives nothing, so the icon stays visible but stops answering clicks
-	// until the app restarts (getlantern/systray#269). Pin the goroutine.
+	// until the app restarts (upstream getlantern/systray#269). Pin the goroutine.
 	goruntime.LockOSThread()
 	defer goruntime.UnlockOSThread()
 
@@ -683,6 +683,8 @@ func (a *App) onReady(icon []byte) {
 	systray.SetIcon(icon)
 	systray.SetTitle("Git Airlock")
 	systray.SetTooltip("Git Airlock")
+	// Left click opens the dashboard; the context menu stays on right click.
+	systray.SetOnTapped(a.showWindow)
 	mOpen := systray.AddMenuItem("Open dashboard", "Show the Git Airlock window")
 	mRepos := systray.AddMenuItem("Repositories…", "Choose which repositories the dashboard watches")
 	mStatus := systray.AddMenuItem("No activity yet", "Latest worker result; click to open the dashboard")
