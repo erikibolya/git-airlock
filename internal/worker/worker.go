@@ -77,7 +77,7 @@ func (w *Worker) Run(ctx context.Context) (int, error) {
 
 // AutoOpen queues an open request for every local branch that is ahead of the
 // base branch and has no open pull request yet. The normal queue pipeline
-// creates the PR and merges it according to merge (usually when-green).
+// creates the PR and merges it according to merge (usually never, letting the remote auto-merge).
 func (w *Worker) AutoOpen(ctx context.Context) (int, error) {
 	if !w.Cfg.AutoPR {
 		return 0, nil
@@ -102,7 +102,7 @@ func (w *Worker) AutoOpen(ctx context.Context) (int, error) {
 	}
 	merge := w.Cfg.Merge
 	if merge == "" {
-		merge = "when-green"
+		merge = "never"
 	}
 	queued := 0
 	for _, br := range branches {
