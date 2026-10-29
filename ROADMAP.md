@@ -65,6 +65,9 @@
 - **v1.7.2** — the tray icon keeps answering clicks: the systray message loop is
   pinned to one OS thread, and tooltip updates wait for the icon instead of
   racing tray start-up.
+- **v1.7.3** — unsigned stopgap for Defender: PE metadata and an unstripped
+  Windows CLI to reduce ML false positives, and the scheduled task runs
+  `airlock.exe worker --hidden` directly (no VBS launcher, no WSH dialogs).
 
 ## Next
 

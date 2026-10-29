@@ -58,13 +58,13 @@ Desktop module (Go 1.25+, Windows needs WebView2, `wails` on PATH):
 ```bash
 cd desktop
 go vet ./...
-wails build -ldflags "-X main.version=1.7.2"
+wails build -ldflags "-X main.version=1.7.3"
 ```
 
 Installer, CLI and desktop in one step (Windows):
 
 ```powershell
-pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Au.Net\.airlock.windows.toml -Version v1.7.2
+pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Au.Net\.airlock.windows.toml -Version v1.7.3
 ```
 
 Integration test (Docker Compose v2):
@@ -156,18 +156,18 @@ branch cleanup. It needs network access to pull images.
 
 ## Current status (2026-10-29)
 
-- Latest release: **v1.7.2** (tray icon stays responsive; systray loop pinned to
-  one OS thread). Homebrew tap and Scoop bucket are updated; the Linux
-  `.bin/airlock` still runs 1.7.1, which is fine because the CLI did not change.
-- The Windows box runs 1.7.1 and was offered 1.7.2. Defender then quarantined
-  the new `airlock.exe` (false positive), so the worker is stopped until the
-  exclusion/restore is done; see docs/CODE_SIGNING.md. The scheduled worker task
-  `Git Airlock` is defined and runs every minute.
+- Latest release: **v1.7.3** (unsigned stopgap: PE metadata, no VBS launcher).
+  Homebrew tap and Scoop bucket are updated; the Linux `.bin/airlock` still runs
+  1.7.1, which is fine because the CLI did not change.
+- The Windows box still has a quarantined `airlock.exe` from the 1.7.2 update.
+  Install 1.7.3 after adding the Defender exclusion (docs/CODE_SIGNING.md), then
+  submit the 1.7.3 `airlock.exe` to Microsoft as a false positive. The scheduled
+  task `Git Airlock` is defined and runs every minute.
 - Code signing: application submitted to SignPath Foundation on 2026-10-29.
   Windows builds now carry PE metadata; after approval, enable the signing steps
   from docs/CODE_SIGNING.md.
 - winget: the 1.6.0 package PR (#464029) is still in Microsoft review. The
-  1.7.2 manifests are rendered; submit the update once it merges.
+  1.7.3 manifests are rendered; submit the update once it merges.
 - Open roadmap items: SignPath code signing (pending approval), Linux deb/rpm
   packages, labels and review automation, optional in-app update banner.
 
