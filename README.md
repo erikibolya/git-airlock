@@ -80,7 +80,7 @@ scoop install git-airlock/git-airlock
 
 The winget manifest for `ErikIbolya.GitAirlock` is in
 [microsoft/winget-pkgs#464029](https://github.com/microsoft/winget-pkgs/pull/464029)
-(still in Microsoft review as of 1.7.2); once merged, install it with
+(still in Microsoft review as of 1.7.3); once merged, install it with
 `winget install ErikIbolya.GitAirlock`. The manifests are generated from
 [`packaging/`](packaging).
 

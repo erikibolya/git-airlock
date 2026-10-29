@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.3 — 2026-10-29
 
 - Windows builds carry PE metadata: `installer/winres.json` is rendered by
   `go-winres` for `airlock.exe` (company, product, file description, version,
