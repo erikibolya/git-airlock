@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.8.1 — 2026-10-29
+
+- Faster page switches: the dashboard caches the queue summary for three
+  seconds, uses the activity list instead of reading one result per pending
+  request, and no longer reloads an idle dashboard every 60 seconds.
+- The desktop window hides the in-page navigation. Dashboard, Repositories,
+  Manual and Logs live in the native File menu, so they are not duplicated in
+  the header.
+- **Open dashboard** in the repository picker no longer flashes a console:
+  `schtasks` runs with `CREATE_NO_WINDOW`.
+- **Sync now** from the native menu or the tray reports the result in a native
+  notification, with a "syncing" notification if it takes more than two seconds.
+- The manual page is grouped into Pull requests, Maintenance, Pending requests
+  and Recent results, with a proper page title.
+
 ## 1.8.0 — 2026-10-29
 
 - Native-looking redesign of the dashboard and repository picker: 13px Segoe UI,
