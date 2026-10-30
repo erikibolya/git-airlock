@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **The rolling dev prerelease is tagged `dev-build`, not `dev`.** A tag named like the `dev`
+  branch makes git resolve the short revision to the tag (`git log dev`, `git merge dev`) and
+  makes `git worktree add … dev` fail with `fatal: ambiguous object name`; the desktop app's dev
+  manifest now reads `releases/download/dev-build/dev.json`. Stable releases are untouched.
+
 ## 1.8.7 — 2026-10-29
 
 - **Install latest dev build…** and **Revert to last stable version…** are in
