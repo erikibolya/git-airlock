@@ -18,7 +18,7 @@ var version = "dev"
 
 const (
 	updateManifestURL = "https://github.com/erikibolya/git-airlock/releases/latest/download/latest.json"
-	devManifestURL    = "https://github.com/erikibolya/git-airlock/releases/download/dev/dev.json"
+	devManifestURL    = "https://github.com/erikibolya/git-airlock/releases/download/dev-build/dev.json"
 	updatePublicKey   = "Acgkri/7VClnySjUZCHXEKZducmObsLKc6mgcfgiJWQ="
 	releasePageURL    = "https://github.com/erikibolya/git-airlock/releases/latest"
 )
