@@ -89,7 +89,7 @@ jobs:
           New-Item -ItemType Directory -Force dist | Out-Null
           go run ./cmd/updatesign manifest --version $version `
             --installer "installer/dist/GitAirlockSetup-$version.exe" `
-            --url "https://github.com/erikibolya/git-airlock/releases/download/dev/GitAirlockSetup-$version.exe" `
+            --url "https://github.com/erikibolya/git-airlock/releases/download/dev-build/GitAirlockSetup-$version.exe" `
             --notes "Dev build from dev@${{ github.sha }}" `
             --out "dist/dev.json"
       - name: Stage dev files
@@ -119,19 +119,19 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           set -euo pipefail
-          if gh release view dev --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload dev dist/* --repo "$GITHUB_REPOSITORY" --clobber
-            gh release edit dev --repo "$GITHUB_REPOSITORY" --prerelease \
+          if gh release view dev-build --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload dev-build dist/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit dev-build --repo "$GITHUB_REPOSITORY" --prerelease \
               --notes "Rolling Windows build from the dev branch. Latest: $VERSION"
-            gh release view dev --repo "$GITHUB_REPOSITORY" --json assets \
+            gh release view dev-build --repo "$GITHUB_REPOSITORY" --json assets \
               --jq '.assets[].name' |
               grep -E '^GitAirlockSetup-.*\.exe$' |
               grep -v "GitAirlockSetup-${VERSION}.exe" |
               while read -r asset; do
-                gh release delete-asset dev "$asset" --repo "$GITHUB_REPOSITORY" --yes
+                gh release delete-asset dev-build "$asset" --repo "$GITHUB_REPOSITORY" --yes
               done || true
           else
-            gh release create dev dist/* --repo "$GITHUB_REPOSITORY" \
+            gh release create dev-build dist/* --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" --prerelease --latest=false \
               --title "Dev build" \
               --notes "Rolling Windows build from the dev branch. Latest: $VERSION"
