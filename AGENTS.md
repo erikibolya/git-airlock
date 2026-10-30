@@ -164,7 +164,7 @@ branch cleanup. It needs network access to pull images.
   Linux `.bin/airlock` still runs 1.7.1, which is fine because the CLI did not
   change.
 - `dev` is the integration branch. Pushes that touch code publish a rolling
-  `dev` prerelease with a signed `dev.json`; merge to `main` and tag only with
+  `dev-build` prerelease with a signed `dev.json`; merge to `main` and tag only with
   the human's approval. The Windows box tested `1.8.7-dev.2` before the stable
   release.
 - Code signing: application submitted to SignPath Foundation on 2026-10-29.
