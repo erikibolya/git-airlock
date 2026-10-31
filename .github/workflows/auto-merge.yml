@@ -10,6 +10,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   enable:
@@ -36,3 +37,30 @@ jobs:
             exit 0
           fi
           gh pr merge --auto --merge --delete-branch "$PR" --repo "$REPO"
+
+      - name: Wait for merge and trigger the dev build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # A merge performed with GITHUB_TOKEN does not emit a push workflow
+          # event. Wait for the native auto-merge and dispatch the rolling dev
+          # build explicitly instead of relying on the push trigger.
+          for _ in $(seq 1 120); do
+            merged=$(gh pr view "$PR" --repo "$REPO" --json mergedAt --jq '.mergedAt // empty')
+            state=$(gh pr view "$PR" --repo "$REPO" --json state --jq '.state')
+            if [ -n "$merged" ]; then
+              gh workflow run dev-release.yml --ref dev --repo "$REPO"
+              echo "Triggered Dev build for the merge of #$PR."
+              exit 0
+            fi
+            if [ "$state" = "CLOSED" ]; then
+              echo "PR #$PR closed without merging; not triggering a build."
+              exit 1
+            fi
+            sleep 30
+          done
+          echo "Timed out waiting for #$PR to merge."
+          exit 1
