@@ -95,6 +95,34 @@ func (p *Provider) FindPR(ctx context.Context, head, base string) (*provider.PR,
 	return best, nil
 }
 
+// ListPRs returns the merge requests targeting base in the given state ("open" or
+// "all"), newest first. GitLab calls the open state "opened" and has no "all" value,
+// so "all" means "no state filter" here.
+func (p *Provider) ListPRs(ctx context.Context, base, state string) ([]*provider.PR, error) {
+	q := url.Values{}
+	if state != "" && state != "all" {
+		q.Set("state", state)
+	}
+	if base != "" {
+		q.Set("target_branch", base)
+	}
+	q.Set("per_page", "100")
+	q.Set("order_by", "updated_at")
+	q.Set("sort", "desc")
+	var list []mr
+	if err := p.do(ctx, http.MethodGet, p.mrPath()+"?"+q.Encode(), nil, &list); err != nil {
+		return nil, err
+	}
+	out := make([]*provider.PR, 0, len(list))
+	for i := range list {
+		if base != "" && list[i].TargetBranch != base {
+			continue
+		}
+		out = append(out, list[i].toPR())
+	}
+	return out, nil
+}
+
 func (p *Provider) CreatePR(ctx context.Context, req provider.CreateRequest) (*provider.PR, error) {
 	body := map[string]any{
 		"source_branch": req.Head,
@@ -232,6 +260,7 @@ func (m mr) toPR() *provider.PR {
 		State:     m.State,
 		Merged:    merged,
 		Mergeable: m.MergeStatus == "can_be_merged",
+		Head:      m.SourceBranch,
 		HeadSHA:   m.SHA,
 	}
 }

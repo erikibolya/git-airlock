@@ -104,6 +104,12 @@ func (w *Worker) AutoOpen(ctx context.Context) (int, error) {
 	if merge == "" {
 		merge = "never"
 	}
+	// One query per cycle. The per-branch FindOpenPR/FindPR calls fetched the same list
+	// once per branch, which on a slow provider took longer than the scheduler interval.
+	prs, err := w.P.ListPRs(ctx, w.Cfg.Base, "all")
+	if err != nil {
+		return 0, fmt.Errorf("list pull requests: %w", err)
+	}
 	queued := 0
 	for _, br := range branches {
 		// The base branch can be ahead of its remote-tracking ref (local commits that are
@@ -111,23 +117,14 @@ func (w *Worker) AutoOpen(ctx context.Context) (int, error) {
 		if br.Name == w.Cfg.Base || w.ignoredBranch(br.Name) || queuedOpen[br.Name] {
 			continue
 		}
-		open, err := w.P.FindOpenPR(ctx, br.Name, w.Cfg.Base)
-		if err != nil {
-			w.Q.Log("auto-pr %s: %v", br.Name, err)
-			continue
-		}
+		open, latest := newestBranchPRs(prs, br.Name)
 		if open != nil {
-			continue
-		}
-		latest, err := w.P.FindPR(ctx, br.Name, w.Cfg.Base)
-		if err != nil {
-			w.Q.Log("auto-pr %s: %v", br.Name, err)
 			continue
 		}
 		// A merged (e.g. squashed) or explicitly closed PR for this exact
 		// commit means there is nothing new to propose. A newer commit is a
 		// new intent and gets a fresh PR.
-		if latest != nil && latest.HeadSHA == br.SHA && (latest.Merged || latest.State == "closed") {
+		if latest != nil && latest.HeadSHA == br.SHA && (latest.Merged || latest.State == "closed" || latest.State == "merged") {
 			continue
 		}
 		req := &queue.Request{
@@ -149,6 +146,25 @@ func (w *Worker) AutoOpen(ctx context.Context) (int, error) {
 		queued++
 	}
 	return queued, nil
+}
+
+// newestBranchPRs picks the newest open PR and the newest PR in any state for head from
+// a list fetched once per cycle. GitLab reports open pull requests as "opened".
+func newestBranchPRs(prs []*provider.PR, head string) (open, latest *provider.PR) {
+	for _, pr := range prs {
+		if pr.Head != head {
+			continue
+		}
+		if !pr.Merged && (pr.State == "open" || pr.State == "opened") {
+			if open == nil || pr.Number > open.Number {
+				open = pr
+			}
+		}
+		if latest == nil || pr.Number > latest.Number {
+			latest = pr
+		}
+	}
+	return open, latest
 }
 
 func (w *Worker) ignoredBranch(name string) bool {

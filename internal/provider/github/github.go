@@ -101,6 +101,33 @@ func (p *Provider) FindPR(ctx context.Context, head, base string) (*provider.PR,
 	return best, nil
 }
 
+// ListPRs returns the PRs targeting base in the given state ("open" or "all"), newest
+// first, so Auto-PR can match branches locally instead of querying per branch.
+func (p *Provider) ListPRs(ctx context.Context, base, state string) ([]*provider.PR, error) {
+	q := url.Values{}
+	if state != "" {
+		q.Set("state", state)
+	}
+	if base != "" {
+		q.Set("base", base)
+	}
+	q.Set("sort", "updated")
+	q.Set("direction", "desc")
+	q.Set("per_page", "100")
+	var list []apiPR
+	if err := p.do(ctx, http.MethodGet, "/repos/"+p.repo+"/pulls?"+q.Encode(), nil, &list); err != nil {
+		return nil, err
+	}
+	out := make([]*provider.PR, 0, len(list))
+	for i := range list {
+		if base != "" && list[i].Base.Ref != base {
+			continue
+		}
+		out = append(out, list[i].toPR())
+	}
+	return out, nil
+}
+
 func (p *Provider) CreatePR(ctx context.Context, req provider.CreateRequest) (*provider.PR, error) {
 	body := map[string]any{
 		"head":  req.Head,
@@ -224,6 +251,7 @@ func (p apiPR) toPR() *provider.PR {
 		State:     p.State,
 		Merged:    p.Merged,
 		Mergeable: mergeable,
+		Head:      p.Head.Ref,
 		HeadSHA:   p.Head.SHA,
 	}
 }
