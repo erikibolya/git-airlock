@@ -19,6 +19,7 @@ import (
 const (
 	networkTimeout = 90 * time.Second
 	localTimeout   = 60 * time.Second
+	verifyTimeout  = 30 * time.Second
 )
 
 // SyncReport describes what a mirror sync changed.
@@ -480,12 +481,30 @@ func ensureRemote(ctx context.Context, dir, name, rawURL string) error {
 
 func push(ctx context.Context, dir, remote, ref, branch string) error {
 	pushCtx, cancel := context.WithTimeout(ctx, networkTimeout)
-	defer cancel()
 	_, err := run(pushCtx, dir, networkTimeout, true, "push", remote, ref+":refs/heads/"+branch)
-	if err != nil {
+	cancel()
+	if err == nil {
+		return nil
+	}
+
+	// Gitea may accept the ref update but leave the HTTP response open until
+	// the request times out. In that case the push did land even though git
+	// returned an error. Verify before reporting failure, otherwise the
+	// worker skips auto-PR and retries a push that already succeeded.
+	localSHA, localErr := revParse(ctx, dir, ref)
+	if localErr != nil || localSHA == "" {
 		return fmt.Errorf("push %s: %w", branch, err)
 	}
-	return nil
+	verifyCtx, verifyCancel := context.WithTimeout(ctx, verifyTimeout)
+	out, verifyErr := run(verifyCtx, dir, verifyTimeout, true, "ls-remote", remote, "refs/heads/"+branch)
+	verifyCancel()
+	if verifyErr == nil {
+		fields := strings.Fields(out)
+		if len(fields) > 0 && strings.EqualFold(fields[0], localSHA) {
+			return nil
+		}
+	}
+	return fmt.Errorf("push %s: %w", branch, err)
 }
 
 func revParse(ctx context.Context, dir, ref string) (string, error) {
