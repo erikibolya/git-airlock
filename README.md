@@ -293,7 +293,7 @@ hides the banner but keeps it in the notification center. It never holds the API
 token; the scheduled worker still performs the sync and the API calls.
 
 ```powershell
-airlock-desktop.exe --config Z:\repos\Acme\Au.Net\.airlock.windows.toml
+airlock-desktop.exe --config Z:\repos\Acme\Project\.airlock.windows.toml
 airlock-desktop.exe --config <a> --config <b>     # several repositories
 airlock-desktop.exe --repos                       # open the repository picker
 ```
@@ -318,7 +318,7 @@ winget install -e --id JRSoftware.InnoSetup
 pwsh -File installer/build.ps1
 
 # use this machine's config as the default instead of the example template
-pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Au.Net\.airlock.windows.toml
+pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Project\.airlock.windows.toml
 ```
 
 On Linux, install `libgtk-3-dev libwebkit2gtk-4.1-dev` and run `wails build` in
@@ -394,11 +394,11 @@ When the workstation cannot mount the mirror at all, keep a local cache instead.
 The isolated config stays unchanged; the worker config adds:
 
 ```toml
-mirror = "~/.cache/git-airlock/mirrors/Au.Net.git"   # cache, created on first sync
-mirror_remote = "ssh://erik@holly/mnt/user/Development/repos/.mirrors/Au.Net.git"
+mirror = "~/.cache/git-airlock/mirrors/project.git"   # cache, created on first sync
+mirror_remote = "ssh://user@host/path/to/project.git"
 queue = "git"
-queue_remote = "ssh://erik@holly/mnt/user/Development/repos/.mirrors/Au.Net.git"
-remote_url = "https://gitea.example.com/ActiUnit/Au.Net.git"
+queue_remote = "ssh://user@host/path/to/project.git"
+remote_url = "https://gitea.example.com/acme/project.git"
 ```
 
 The worker fetches both the SSH mirror and the private remote into the cache,
