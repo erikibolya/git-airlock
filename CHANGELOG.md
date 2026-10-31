@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **The worker can fast-forward a working copy.** `worktree = "Z:/repos/…"` makes the
+  worker bring remote changes into the checkout the human edits after every successful
+  sync: fetch the base branch from the mirror and fast-forward it. It never forces — a
+  branch that is dirty, ahead, diverged or checked out with conflicting changes is left
+  untouched. The worker runs on the VPN side, so this is the only place remote changes can
+  be pulled back into the workspace.
+- **`hold = true` opens PRs as drafts.** Gitea derives "draft" from a `WIP:` title prefix,
+  so the native auto-merge job skips held PRs; remove the prefix and merge when reviewed.
+  `airlock pr open --hold` does the same for a single PR.
 - **Auto-PR lists pull requests once per cycle.** It asked twice per branch
   (`FindOpenPR` + `FindPR`), so a repository with ~15 branches made ~30 API round trips
   every cycle; against a slow Gitea that outlived the scheduled task's run limit. The
