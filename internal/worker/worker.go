@@ -136,6 +136,7 @@ func (w *Worker) AutoOpen(ctx context.Context) (int, error) {
 			Title:    br.Subject,
 			Body:     "Opened automatically by Git Airlock.",
 			Strategy: w.Cfg.MergeStrategy,
+			Hold:     w.Cfg.Hold,
 		}
 		id, err := w.Q.Enqueue(req)
 		if err != nil {
@@ -146,6 +147,67 @@ func (w *Worker) AutoOpen(ctx context.Context) (int, error) {
 		queued++
 	}
 	return queued, nil
+}
+
+// workInProgressPrefixes are the title prefixes Gitea renders as a draft PR.
+var workInProgressPrefixes = []string{"WIP:", "[WIP]"}
+
+// markWorkInProgress returns title with a draft prefix unless it already has one.
+func markWorkInProgress(title string) string {
+	upper := strings.ToUpper(strings.TrimSpace(title))
+	for _, prefix := range workInProgressPrefixes {
+		if strings.HasPrefix(upper, prefix) {
+			return title
+		}
+	}
+	return "WIP: " + title
+}
+
+// SyncWorktree fast-forwards the configured working copy to the mirror's base branch.
+//
+// The worker runs on the VPN side, so this is the only place that can bring remote
+// changes back into the checkout the human edits. It only ever fast-forwards: a branch
+// that is ahead, diverged, or checked out with conflicting changes is left untouched
+// and logged.
+func (w *Worker) SyncWorktree(ctx context.Context) {
+	worktree := strings.TrimSpace(w.Cfg.Worktree)
+	branch := w.Cfg.Base
+	if worktree == "" || branch == "" {
+		return
+	}
+	local, err := w.gitOutput(ctx, worktree, "rev-parse", "--verify", "-q", "refs/heads/"+branch)
+	if err != nil || local == "" {
+		w.Q.Log("worktree %s: no branch %s", worktree, branch)
+		return
+	}
+	if _, err := w.gitOutput(ctx, worktree, "fetch", "--no-tags", w.Cfg.Mirror, "refs/heads/"+branch); err != nil {
+		w.Q.Log("worktree %s: fetch %s: %v", worktree, branch, err)
+		return
+	}
+	remote, err := w.gitOutput(ctx, worktree, "rev-parse", "--verify", "-q", "FETCH_HEAD")
+	if err != nil || remote == "" || remote == local {
+		return
+	}
+	if proc.CommandContext(ctx, "git", "-C", worktree, "merge-base", "--is-ancestor", local, remote).Run() != nil {
+		return // ahead or diverged: never rewrite the human's work
+	}
+	head, _ := w.gitOutput(ctx, worktree, "symbolic-ref", "-q", "HEAD")
+	if head == "refs/heads/"+branch {
+		if err := proc.CommandContext(ctx, "git", "-C", worktree, "merge", "--ff-only", remote).Run(); err != nil {
+			w.Q.Log("worktree %s: kept %s (dirty or in use): %v", worktree, branch, err)
+			return
+		}
+	} else if err := proc.CommandContext(ctx, "git", "-C", worktree, "update-ref", "refs/heads/"+branch, remote, local).Run(); err != nil {
+		w.Q.Log("worktree %s: update %s: %v", worktree, branch, err)
+		return
+	}
+	w.Q.Log("worktree %s: fast-forwarded %s %.8s..%.8s", worktree, branch, local, remote)
+}
+
+func (w *Worker) gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := proc.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	out, err := cmd.Output()
+	return strings.TrimSpace(string(out)), err
 }
 
 // newestBranchPRs picks the newest open PR and the newest PR in any state for head from
@@ -300,6 +362,11 @@ func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base s
 		if title == "" {
 			title = "Automated PR: " + head + " -> " + base
 		}
+		if req.Hold {
+			// Gitea derives "draft" from the title, and the repo's auto-merge job skips
+			// drafts. Removing the prefix in the UI releases the PR for merging.
+			title = markWorkInProgress(title)
+		}
 		pr, err = w.P.CreatePR(ctx, provider.CreateRequest{
 			Head:  head,
 			Base:  base,
@@ -337,6 +404,9 @@ func (w *Worker) handleOpen(ctx context.Context, res *queue.Result, head, base s
 	if merge == "never" {
 		res.OK = true
 		res.Message = fmt.Sprintf("PR #%d open", pr.Number)
+		if req.Hold {
+			res.Message += " (draft: remove the WIP: prefix to release)"
+		}
 		return
 	}
 	if merge == "when-green" {

@@ -46,6 +46,14 @@ type Config struct {
 	AutoPR bool `toml:"auto_pr"`
 	// AutoPRIgnore lists branch globs (filepath.Match) that AutoPR skips.
 	AutoPRIgnore []string `toml:"auto_pr_ignore"`
+	// Worktree is an optional working copy that the worker fast-forwards to Base after
+	// a successful sync. The worker runs on the VPN side, so this is how remote changes
+	// reach the checkout the human edits. Only fast-forwards; a dirty, checked-out-elsewhere
+	// or diverged branch is left untouched.
+	Worktree string `toml:"worktree"`
+	// Hold opens PRs as drafts (Gitea treats a "WIP:" title as a draft) so native
+	// auto-merge waits for a human. Removing the prefix in the UI releases the PR.
+	Hold bool `toml:"hold"`
 }
 
 // Filename is the per-repository config file name.

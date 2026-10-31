@@ -391,6 +391,7 @@ func cmdPROpen(ctx context.Context, args []string) error {
 	mergeFlag := fs.String("merge", "", "never, when-green or now")
 	strategyFlag := fs.String("strategy", "", "merge method: merge, squash or rebase")
 	deleteBranch := fs.Bool("delete-branch", false, "delete the source branch after merging")
+	hold := fs.Bool("hold", false, "create the PR as a draft (hold it for review)")
 	dryRun := fs.Bool("dry-run", false, "validate without creating anything")
 	wait := fs.Duration("wait", 2*time.Minute, "how long to wait for the worker")
 	noWait := fs.Bool("no-wait", false, "queue and exit immediately")
@@ -449,6 +450,7 @@ func cmdPROpen(ctx context.Context, args []string) error {
 		Merge:        merge,
 		Strategy:     *strategyFlag,
 		DeleteBranch: *deleteBranch,
+		Hold:         *hold || cfg.Hold,
 		DryRun:       *dryRun,
 	}
 	return enqueueAndWait(ctx, cfg, req, *wait, *noWait)
@@ -652,6 +654,10 @@ func runRepoCycle(ctx context.Context, r *repoWorker, noSync bool) int {
 		}
 	}
 	if synced {
+		if !noSync {
+			// The human's checkout follows the remote without a manual pull.
+			r.w.SyncWorktree(ctx)
+		}
 		n, err := r.w.AutoOpen(ctx)
 		if err != nil {
 			r.w.Q.Log("auto-pr failed: %v", err)
