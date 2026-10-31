@@ -44,7 +44,7 @@ git tag -a v$VERSION -m "v$VERSION"
 git push origin v$VERSION
 ```
 
-Watch the run (the `gh` CLI is installed in WSL on the Holly machine):
+Watch the run (the `gh` CLI is installed in WSL on the build host):
 
 ```bash
 gh run list --limit 3
@@ -143,8 +143,8 @@ publisher and license fields in sync with `packaging/winget`.
 Update the CLI used by the agent and containers from the release archive:
 
 ```bash
-install -m 0755 airlock-linux-amd64 /mnt/user/Development/repos/.bin/airlock
-/mnt/user/Development/repos/.bin/airlock version
+install -m 0755 airlock-linux-amd64 /path/to/repos/.bin/airlock
+/path/to/repos/.bin/airlock version
 ```
 
 If a worker or container runs its own copy, stop it first (on Windows the

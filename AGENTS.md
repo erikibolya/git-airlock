@@ -64,7 +64,7 @@ wails build -ldflags "-X main.version=1.8.5"
 Installer, CLI and desktop in one step (Windows):
 
 ```powershell
-pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Au.Net\.airlock.windows.toml -Version v1.8.5
+pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Project\.airlock.windows.toml -Version v1.8.5
 ```
 
 Integration test (Docker Compose v2):
@@ -93,7 +93,7 @@ branch cleanup. It needs network access to pull images.
 
 - Public key: `updatePublicKey` in `desktop/update.go`.
 - Private seed: GitHub Actions secret `UPDATE_SIGNING_KEY`; for local
-  manifests `~/.config/git-airlock/update-signing-key` on the Holly WSL user.
+  manifests `~/.config/git-airlock/update-signing-key` on the WSL user.
 - Rotating the key means `go run ./cmd/updatesign keygen`, replacing the secret
   **and** shipping a build with the new public key. Old clients cannot verify
   the new manifest, so rotation needs one release signed with the old key that
@@ -145,7 +145,7 @@ branch cleanup. It needs network access to pull images.
 ## Environment (the maintainer's setup)
 
 - Windows dev box, WSL `Ubuntu20.04LTS`; repo at `Z:\repos\git-airlock`
-  (SMB share from Holly) and `/mnt/user/Development/repos/git-airlock` in WSL.
+  (shared mirror share) and `/path/to/repos/git-airlock` in WSL.
 - Go SDK: `C:\Users\eriki\bin\go-sdk\go`; `wails` and Go tools in
   `C:\Users\eriki\go\bin`.
 - `gh` is only installed inside WSL; use
@@ -153,8 +153,8 @@ branch cleanup. It needs network access to pull images.
 - Desktop install: `%LOCALAPPDATA%\Programs\Git Airlock`; config in
   `%APPDATA%\git-airlock`; the worker runs as the interactive user task
   `Git Airlock` every minute.
-- The CLI used by the agent/holly container is
-  `/mnt/user/Development/repos/.bin/airlock` (update it from the release
+- The CLI used by the agent container is
+  `/path/to/repos/.bin/airlock` (update it from the release
   archive after each version).
 
 ## Current status (2026-10-29)

@@ -286,7 +286,7 @@ func Sync(ctx context.Context, mirror, remote string) (SyncReport, error) {
 	return report, nil
 }
 
-// SyncOverSSH bridges a local cache between an SSH-reachable mirror ("holly")
+// SyncOverSSH bridges a local cache between an SSH-reachable mirror ("mirror")
 // and the private remote. It creates the cache directory when missing and
 // never force-pushes: diverged branches are reported in the result.
 func SyncOverSSH(ctx context.Context, dir, mirrorRemote, remoteURL, remoteName string) (SyncReport, error) {
@@ -300,7 +300,7 @@ func SyncOverSSH(ctx context.Context, dir, mirrorRemote, remoteURL, remoteName s
 	if err := ensureCache(ctx, dir); err != nil {
 		return report, err
 	}
-	if err := ensureRemote(ctx, dir, "holly", mirrorRemote); err != nil {
+	if err := ensureRemote(ctx, dir, "mirror", mirrorRemote); err != nil {
 		return report, err
 	}
 	if remoteURL != "" {
@@ -311,7 +311,7 @@ func SyncOverSSH(ctx context.Context, dir, mirrorRemote, remoteURL, remoteName s
 		return report, fmt.Errorf("remote %q is not configured; set remote_url in the config", remoteName)
 	}
 
-	remotes := []string{"holly", remoteName}
+	remotes := []string{"mirror", remoteName}
 	for _, r := range remotes {
 		fetchCtx, cancel := context.WithTimeout(ctx, networkTimeout)
 		_, err := run(fetchCtx, dir, networkTimeout, true, "fetch", "--prune", "--tags", r,
