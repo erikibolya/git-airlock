@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **No auto-PR after a failed sync.** When the mirror sync fails, the worker skips
+  proposing new pull requests for that run. The branches a failed sync did not push do not
+  exist on the remote, and Gitea answers `POST /pulls` for a missing head branch with its
+  generic 404, so a read-only or broken token queued one guaranteed failure per branch per
+  minute (thousands of result refs) until a sync succeeded again.
+- **No pull request for the base branch itself.** `BranchesAhead` recognises a
+  remote-tracking base (`refs/remotes/<remote>/<branch>`), so local commits on the base no
+  longer produce an `open: head and base are both …` failure.
 - **The rolling dev prerelease is tagged `dev-build`, not `dev`.** A tag named like the `dev`
   branch makes git resolve the short revision to the tag (`git log dev`, `git merge dev`) and
   makes `git worktree add … dev` fail with `fatal: ambiguous object name`; the desktop app's dev

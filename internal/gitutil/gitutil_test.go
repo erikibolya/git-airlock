@@ -172,6 +172,35 @@ func TestBranchesAhead(t *testing.T) {
 	}
 }
 
+func TestBranchesAheadSkipsRemoteBase(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	gitCmd(t, dir, "init", "--bare")
+	gitCmd(t, dir, "symbolic-ref", "HEAD", "refs/heads/main")
+
+	work := t.TempDir()
+	gitCmd(t, work, "init")
+	gitCmd(t, work, "checkout", "-b", "main")
+	commitFile(t, work, "a.txt", "a", "base")
+	gitCmd(t, work, "remote", "add", "origin", dir)
+	gitCmd(t, work, "push", "origin", "main")
+	baseSHA := gitCmd(t, work, "rev-parse", "HEAD")
+
+	// The remote-tracking base lags behind: local main has a commit the sync has not
+	// pushed yet. main is still the base and must not be reported as ahead of itself.
+	gitCmd(t, dir, "update-ref", "refs/remotes/origin/main", baseSHA)
+	commitFile(t, work, "local.txt", "local", "local only")
+	gitCmd(t, work, "push", "origin", "main")
+
+	got, err := BranchesAhead(ctx, dir, "refs/remotes/origin/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("got %+v, want no branch (main is the base)", got)
+	}
+}
+
 func TestSyncOverSSH(t *testing.T) {
 	ctx := context.Background()
 	base := t.TempDir()

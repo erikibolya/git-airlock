@@ -614,27 +614,7 @@ func cmdWorker(ctx context.Context, args []string) error {
 
 	runAll := func() {
 		for _, r := range repos {
-			if !*noSync {
-				report, err := reposync.Sync(ctx, r.cfg)
-				printSyncReport(report)
-				if err != nil {
-					r.w.Q.Log("sync failed: %v", err)
-					fmt.Fprintf(os.Stderr, "sync %s: %v\n", r.cfg.Repo, err)
-				}
-			}
-			if n, err := r.w.AutoOpen(ctx); err != nil {
-				r.w.Q.Log("auto-pr failed: %v", err)
-				fmt.Fprintf(os.Stderr, "auto-pr %s: %v\n", r.cfg.Repo, err)
-			} else if n > 0 {
-				fmt.Printf("auto-pr: queued %d request(s) for %s\n", n, r.cfg.Repo)
-			}
-			n, err := r.w.Run(ctx)
-			if err != nil {
-				r.w.Q.Log("worker failed: %v", err)
-				fmt.Fprintf(os.Stderr, "worker %s: %v\n", r.cfg.Repo, err)
-			} else if n > 0 {
-				fmt.Printf("processed %d request(s) from %s\n", n, r.path)
-			}
+			runRepoCycle(ctx, r, *noSync)
 		}
 	}
 
@@ -649,6 +629,46 @@ func cmdWorker(ctx context.Context, args []string) error {
 		case <-time.After(*loop):
 		}
 	}
+}
+
+// runRepoCycle runs one worker iteration for a repository: sync the mirror, queue pull
+// requests for branches ahead of the base, then drain the queue. It returns how many
+// pull requests were proposed.
+//
+// Auto-open is skipped when the sync failed. Every branch a failed sync did not push is
+// missing on the remote, and Gitea rejects a pull request for a missing head branch with
+// its generic 404 ("not found"). Queueing those anyway failed once per branch per minute
+// (thousands of result refs) until a sync succeeded again.
+func runRepoCycle(ctx context.Context, r *repoWorker, noSync bool) int {
+	queued := 0
+	synced := true
+	if !noSync {
+		report, err := reposync.Sync(ctx, r.cfg)
+		printSyncReport(report)
+		if err != nil {
+			synced = false
+			r.w.Q.Log("sync failed (skipping auto-pr): %v", err)
+			fmt.Fprintf(os.Stderr, "sync %s: %v\n", r.cfg.Repo, err)
+		}
+	}
+	if synced {
+		n, err := r.w.AutoOpen(ctx)
+		if err != nil {
+			r.w.Q.Log("auto-pr failed: %v", err)
+			fmt.Fprintf(os.Stderr, "auto-pr %s: %v\n", r.cfg.Repo, err)
+		} else if n > 0 {
+			queued = n
+			fmt.Printf("auto-pr: queued %d request(s) for %s\n", n, r.cfg.Repo)
+		}
+	}
+	n, err := r.w.Run(ctx)
+	if err != nil {
+		r.w.Q.Log("worker failed: %v", err)
+		fmt.Fprintf(os.Stderr, "worker %s: %v\n", r.cfg.Repo, err)
+	} else if n > 0 {
+		fmt.Printf("processed %d request(s) from %s\n", n, r.path)
+	}
+	return queued
 }
 
 // ---------- status ----------

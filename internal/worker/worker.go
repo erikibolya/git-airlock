@@ -106,7 +106,9 @@ func (w *Worker) AutoOpen(ctx context.Context) (int, error) {
 	}
 	queued := 0
 	for _, br := range branches {
-		if w.ignoredBranch(br.Name) || queuedOpen[br.Name] {
+		// The base branch can be ahead of its remote-tracking ref (local commits that are
+		// not pushed yet). It is still the base: a PR of it against itself is invalid.
+		if br.Name == w.Cfg.Base || w.ignoredBranch(br.Name) || queuedOpen[br.Name] {
 			continue
 		}
 		open, err := w.P.FindOpenPR(ctx, br.Name, w.Cfg.Base)
