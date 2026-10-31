@@ -28,6 +28,9 @@ func (s *stubProvider) FindOpenPR(context.Context, string, string) (*provider.PR
 func (s *stubProvider) FindPR(context.Context, string, string) (*provider.PR, error) {
 	return nil, nil
 }
+func (s *stubProvider) ListPRs(context.Context, string, string) ([]*provider.PR, error) {
+	return nil, nil
+}
 func (s *stubProvider) CreatePR(_ context.Context, req provider.CreateRequest) (*provider.PR, error) {
 	if s.pr == nil {
 		s.pr = &provider.PR{Number: 1, URL: "https://example/1", State: "open", Mergeable: true, Head: req.Head, HeadSHA: "sha"}
