@@ -25,6 +25,7 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/erikibolya/git-airlock/internal/config"
+	"github.com/erikibolya/git-airlock/internal/configlist"
 	"github.com/erikibolya/git-airlock/internal/gitutil"
 	"github.com/erikibolya/git-airlock/internal/install"
 	"github.com/erikibolya/git-airlock/internal/reposync"
@@ -308,6 +309,7 @@ func (a *App) showWindow() {
 	if a.ctx == nil {
 		return
 	}
+	a.reloadSaved()
 	wailsruntime.WindowShow(a.ctx)
 	wailsruntime.WindowUnminimise(a.ctx)
 	// Windows does not always give focus to a window shown by another process;
@@ -327,6 +329,36 @@ func (a *App) beforeClose(context.Context) bool {
 	}
 	wailsruntime.WindowHide(a.ctx)
 	return true
+}
+
+// reloadSaved retries the saved repository list when the dashboard never loaded.
+// Windows autostarts the app at logon, often before a mapped drive that holds the
+// configs is mounted; without this the picker stayed empty until the app was
+// restarted, because the list was only read once in main.
+func (a *App) reloadSaved() {
+	if a.current.Load() != nil {
+		return
+	}
+	paths := loadSavedConfigs()
+	if len(paths) == 0 {
+		return
+	}
+	box, err := buildBox(paths)
+	if err != nil {
+		return
+	}
+	a.mu.Lock()
+	a.paths = paths
+	a.loadErrs = nil
+	a.mu.Unlock()
+	a.current.Store(box)
+	wasSetup := a.setupMode.Swap(false)
+	if a.syncItem != nil {
+		a.syncItem.Enable()
+	}
+	if wasSetup {
+		wailsruntime.WindowExecJS(a.ctx, "window.location.assign('/')")
+	}
 }
 
 func (a *App) shutdown(context.Context) {
@@ -498,7 +530,13 @@ func (a *App) serveSetup(w http.ResponseWriter, _ *http.Request) {
 	var list strings.Builder
 	for _, p := range paths {
 		esc := html.EscapeString(p)
-		fmt.Fprintf(&list, `<li><code>%s</code><button class="remove" data-path="%s">remove</button></li>`, esc, esc)
+		note := ""
+		if _, err := os.Stat(p); err != nil {
+			// Keep the entry (removing it here lost the repository) and say why it
+			// cannot be loaded yet, e.g. a network drive that is not mounted.
+			note = ` <span class="missing">not reachable</span>`
+		}
+		fmt.Fprintf(&list, `<li><span class="path"><code>%s</code>%s</span><button class="remove" data-path="%s">remove</button></li>`, esc, note, esc)
 	}
 	listHTML := `<p class="empty">No configs yet.</p>`
 	if list.Len() > 0 {
@@ -575,6 +613,8 @@ const setupHTML = `<!doctype html>
   ul.repos{list-style:none;margin:0;padding:0}
   ul.repos li{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-soft)}
   ul.repos li:last-child{border-bottom:0}
+  ul.repos li>span.path{display:flex;align-items:center;gap:8px;min-width:0}
+  ul.repos span.missing{color:var(--danger);font-size:11px;white-space:nowrap}
   ul.repos code{font-size:11.5px;word-break:break-all}
   button.remove{border-color:transparent;background:transparent;color:var(--danger);padding:4px 6px;font-size:12px}
   button.remove:hover{background:var(--err-bg);border-color:var(--err-bd)}
@@ -839,56 +879,19 @@ func truncate(s string, n int) string {
 
 // ---------- saved state / args ----------
 
-type desktopState struct {
-	// Config is the pre-0.9 single-repository field.
-	Config  string   `json:"config,omitempty"`
-	Configs []string `json:"configs,omitempty"`
-}
-
 func statePath() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return ""
+	if p, err := configlist.DefaultPath(); err == nil {
+		return p
 	}
-	return filepath.Join(dir, "git-airlock", "desktop.json")
+	return ""
 }
 
 func loadSavedConfigs() []string {
-	path := statePath()
-	if path == "" {
-		return nil
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	var st desktopState
-	if json.Unmarshal(data, &st) != nil {
-		return nil
-	}
-	paths := st.Configs
-	if len(paths) == 0 && st.Config != "" {
-		paths = []string{st.Config}
-	}
-	var out []string
-	for _, p := range paths {
-		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
-			out = append(out, p)
-		}
-	}
-	return out
+	return configlist.Load(statePath())
 }
 
 func saveConfigs(paths []string) error {
-	path := statePath()
-	if path == "" {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	data, _ := json.MarshalIndent(desktopState{Configs: paths}, "", "  ")
-	return os.WriteFile(path, data, 0o644)
+	return configlist.Save(statePath(), paths)
 }
 
 func argValues(name string) []string {
