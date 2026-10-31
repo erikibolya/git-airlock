@@ -8,7 +8,7 @@ queue    = "~/.airlock/queue"
 
 # Optional with queue="git": push/fetch the queue refs over git (ssh://...)
 # instead of reading the shared mirror.
-# queue_remote = "ssh://host/path/to/repos/.mirrors/owner-name.git"
+# queue_remote = "ssh://host/path/to/.mirrors/owner-name.git"
 
 provider = "gitea"                   # gitea | github | gitlab
 api      = "https://gitea.example.com/api/v1"

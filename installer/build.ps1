@@ -1,7 +1,7 @@
 # Builds airlock-desktop.exe, airlock.exe and the Windows installer.
 #
 #   pwsh -File installer/build.ps1
-#   pwsh -File installer/build.ps1 -Config Z:\repos\acme\Project\.airlock.windows.toml
+#   pwsh -File installer/build.ps1 -Config Z:\repos\Acme\Project\.airlock.windows.toml
 #
 # Without -Config the installer ships airlock.toml.example, so the user picks
 # their config on first launch. With -Config that file becomes the default

@@ -175,11 +175,11 @@ func TestBranchesAhead(t *testing.T) {
 func TestSyncOverSSH(t *testing.T) {
 	ctx := context.Background()
 	base := t.TempDir()
-	host := filepath.Join(base, "host.git")
+	shared := filepath.Join(base, "shared.git")
 	company := filepath.Join(base, "company.git")
 	cache := filepath.Join(base, "cache.git")
-	gitCmd(t, "", "init", "--bare", host)
-	gitCmd(t, host, "symbolic-ref", "HEAD", "refs/heads/main")
+	gitCmd(t, "", "init", "--bare", shared)
+	gitCmd(t, shared, "symbolic-ref", "HEAD", "refs/heads/main")
 	gitCmd(t, "", "init", "--bare", company)
 	gitCmd(t, company, "symbolic-ref", "HEAD", "refs/heads/main")
 
@@ -190,11 +190,11 @@ func TestSyncOverSSH(t *testing.T) {
 	gitCmd(t, work, "init")
 	gitCmd(t, work, "checkout", "-b", "main")
 	commitFile(t, work, "a.txt", "a", "initial")
-	gitCmd(t, work, "remote", "add", "host", host)
-	gitCmd(t, work, "push", "host", "main")
+	gitCmd(t, work, "remote", "add", "shared", shared)
+	gitCmd(t, work, "push", "shared", "main")
 	initial := gitCmd(t, work, "rev-parse", "HEAD")
 
-	report, err := SyncOverSSH(ctx, cache, host, company, "company")
+	report, err := SyncOverSSH(ctx, cache, shared, company, "company")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,11 +211,11 @@ func TestSyncOverSSH(t *testing.T) {
 	gitCmd(t, other, "checkout", "-b", "extra")
 	commitFile(t, other, "b.txt", "b", "extra work")
 	gitCmd(t, other, "push", "origin", "extra")
-	if _, err := SyncOverSSH(ctx, cache, host, company, "company"); err != nil {
+	if _, err := SyncOverSSH(ctx, cache, shared, company, "company"); err != nil {
 		t.Fatal(err)
 	}
-	if got := gitCmd(t, host, "rev-parse", "refs/heads/extra"); got == "" {
-		t.Fatal("extra was not bridged to host")
+	if got := gitCmd(t, shared, "rev-parse", "refs/heads/extra"); got == "" {
+		t.Fatal("extra was not bridged to shared")
 	}
 
 	// A commit pushed to company fast-forwards the mirror.
@@ -223,24 +223,24 @@ func TestSyncOverSSH(t *testing.T) {
 	commitFile(t, other, "c.txt", "c", "company ahead")
 	gitCmd(t, other, "push", "origin", "main")
 	companyTip := gitCmd(t, other, "rev-parse", "HEAD")
-	if _, err := SyncOverSSH(ctx, cache, host, company, "company"); err != nil {
+	if _, err := SyncOverSSH(ctx, cache, shared, company, "company"); err != nil {
 		t.Fatal(err)
 	}
-	if got := gitCmd(t, host, "rev-parse", "refs/heads/main"); got != companyTip {
-		t.Fatalf("host main = %s, want %s", got, companyTip)
+	if got := gitCmd(t, shared, "rev-parse", "refs/heads/main"); got != companyTip {
+		t.Fatalf("shared main = %s, want %s", got, companyTip)
 	}
 
 	// Divergence is reported, not force-pushed.
-	hostWork := filepath.Join(base, "hostwork")
-	gitCmd(t, "", "clone", host, hostWork)
-	gitCmd(t, hostWork, "checkout", "main")
-	commitFile(t, hostWork, "d.txt", "d", "host ahead")
-	gitCmd(t, hostWork, "push", "origin", "main")
+	sharedWork := filepath.Join(base, "sharedwork")
+	gitCmd(t, "", "clone", shared, sharedWork)
+	gitCmd(t, sharedWork, "checkout", "main")
+	commitFile(t, sharedWork, "d.txt", "d", "shared ahead")
+	gitCmd(t, sharedWork, "push", "origin", "main")
 	gitCmd(t, other, "checkout", "main")
 	commitFile(t, other, "e.txt", "e", "company ahead again")
 	gitCmd(t, other, "push", "origin", "main")
 
-	report, err = SyncOverSSH(ctx, cache, host, company, "company")
+	report, err = SyncOverSSH(ctx, cache, shared, company, "company")
 	if !errors.Is(err, ErrDiverged) || len(report.Diverged) == 0 {
 		t.Fatalf("want divergence, got %v %+v", err, report)
 	}

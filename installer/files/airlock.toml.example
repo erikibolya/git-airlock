@@ -14,14 +14,14 @@ remote = "company"
 # nothing here: run `airlock init` or point this at an existing mirror.
 mirror = "C:/Users/you/.airlock/owner-name.git"
 # SSH-only worker: mirror is then a local cache that is created on first sync.
-# mirror_remote = "ssh://user@host/path/to/repos/.mirrors/owner-name.git"
+# mirror_remote = "ssh://user@host/path/to/.mirrors/owner-name.git"
 # remote_url = "https://gitea.example.com/owner/name.git"
 
 # "git" keeps the queue in refs/airlock/* inside the mirror; a path uses files.
 queue = "git"
 
 # Optional: exchange queue refs with this remote instead of the local mirror.
-# queue_remote = "ssh://airlock@host/path/to/repos/.mirrors/repo.git"
+# queue_remote = "ssh://user@host/path/to/.mirrors/repo.git"
 
 # gitea, github or gitlab.
 provider = "gitea"
