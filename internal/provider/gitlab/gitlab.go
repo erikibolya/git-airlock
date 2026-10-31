@@ -100,7 +100,13 @@ func (p *Provider) FindPR(ctx context.Context, head, base string) (*provider.PR,
 // so "all" means "no state filter" here.
 func (p *Provider) ListPRs(ctx context.Context, base, state string) ([]*provider.PR, error) {
 	q := url.Values{}
-	if state != "" && state != "all" {
+	switch state {
+	case "", "all":
+		// GitLab has no "all": leaving state out returns every state.
+	case "open":
+		// The interface says "open"; GitLab calls it "opened".
+		q.Set("state", "opened")
+	default:
 		q.Set("state", state)
 	}
 	if base != "" {
@@ -109,9 +115,19 @@ func (p *Provider) ListPRs(ctx context.Context, base, state string) ([]*provider
 	q.Set("per_page", "100")
 	q.Set("order_by", "updated_at")
 	q.Set("sort", "desc")
+	// Two pages at most: page 2 is only fetched when page 1 is full, so a branch's
+	// older merge request is still seen in a busy repository without an unbounded crawl.
 	var list []mr
-	if err := p.do(ctx, http.MethodGet, p.mrPath()+"?"+q.Encode(), nil, &list); err != nil {
-		return nil, err
+	for page := 1; page <= 2; page++ {
+		q.Set("page", fmt.Sprint(page))
+		var pageItems []mr
+		if err := p.do(ctx, http.MethodGet, p.mrPath()+"?"+q.Encode(), nil, &pageItems); err != nil {
+			return nil, err
+		}
+		list = append(list, pageItems...)
+		if len(pageItems) < 100 {
+			break
+		}
 	}
 	out := make([]*provider.PR, 0, len(list))
 	for i := range list {

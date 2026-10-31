@@ -151,3 +151,28 @@ func TestDeleteBranch(t *testing.T) {
 		t.Fatalf("method=%s path=%s", method, path)
 	}
 }
+
+// The provider interface says "open"; GitLab calls that state "opened", and "all" must
+// not send a state filter at all.
+func TestListPRsStateMapping(t *testing.T) {
+	var gotState string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotState = r.URL.Query().Get("state")
+		_ = json.NewEncoder(w).Encode([]map[string]any{})
+	}))
+	defer srv.Close()
+	p := New(srv.URL+"/api/v4", "o/r", "token", srv.Client())
+
+	if _, err := p.ListPRs(context.Background(), "main", "open"); err != nil {
+		t.Fatal(err)
+	}
+	if gotState != "opened" {
+		t.Fatalf(`state for "open" = %q, want "opened"`, gotState)
+	}
+	if _, err := p.ListPRs(context.Background(), "main", "all"); err != nil {
+		t.Fatal(err)
+	}
+	if gotState != "" {
+		t.Fatalf(`state for "all" = %q, want no state filter`, gotState)
+	}
+}

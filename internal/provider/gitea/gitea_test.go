@@ -150,3 +150,39 @@ func TestDeleteBranch(t *testing.T) {
 		t.Fatalf("method=%s path=%s", method, path)
 	}
 }
+
+// A full first page must trigger a second fetch: a branch's older PR can be on page 2,
+// and missing it would make auto-PR propose a duplicate.
+func TestListPRsFetchesSecondPage(t *testing.T) {
+	var pages []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page := r.URL.Query().Get("page")
+		pages = append(pages, page)
+		n := 50
+		if page == "2" {
+			n = 1
+		}
+		items := make([]map[string]any, 0, n)
+		for i := 0; i < n; i++ {
+			items = append(items, map[string]any{
+				"number": i + 1, "state": "closed",
+				"head": map[string]any{"ref": "feature", "sha": "sha1"},
+				"base": map[string]any{"ref": "main"},
+			})
+		}
+		_ = json.NewEncoder(w).Encode(items)
+	}))
+	defer srv.Close()
+	p := New(srv.URL+"/api/v1", "o/r", "token", srv.Client())
+
+	prs, err := p.ListPRs(context.Background(), "main", "all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prs) != 51 {
+		t.Fatalf("len = %d, want 51 (50 + 1)", len(prs))
+	}
+	if len(pages) != 2 || pages[0] != "1" || pages[1] != "2" {
+		t.Fatalf("pages fetched = %v, want [1 2]", pages)
+	}
+}
