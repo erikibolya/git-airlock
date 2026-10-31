@@ -94,6 +94,10 @@ func run(ctx context.Context, args []string) error {
 		return cmdMCP(ctx, args[1:])
 	case "install-task":
 		return cmdInstallTask(args[1:])
+	case "self-update":
+		return cmdSelfUpdate(ctx, args[1:])
+	case "install-update-task":
+		return cmdInstallUpdateTask(args[1:])
 	case "instructions":
 		return cmdInstructions(args[1:])
 	case "version", "--version", "-v":
@@ -141,6 +145,10 @@ Usage:
   airlock mcp       [--config PATH]
   airlock install-task [--config PATH] [--name "Git Airlock"]
                        [--interval 1m] [--print]
+  airlock self-update [--check] [--force] [--manifest URL]
+                      [--restart-service NAME]...
+  airlock install-update-task [--manifest URL] [--restart-service NAME]...
+                              [--print]
   airlock instructions
   airlock version
 

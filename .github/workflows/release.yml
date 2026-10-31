@@ -108,18 +108,6 @@ jobs:
       - name: Build installer
         shell: pwsh
         run: ./installer/build.ps1 -SkipDesktop -Version ${{ github.ref_name }}
-      - name: Build update manifest
-        shell: pwsh
-        env:
-          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
-        run: |
-          $version = "${{ github.ref_name }}".TrimStart("v")
-          New-Item -ItemType Directory -Force dist | Out-Null
-          go run ./cmd/updatesign manifest --version $version `
-            --installer "installer/dist/GitAirlockSetup-$version.exe" `
-            --url "https://github.com/erikibolya/git-airlock/releases/download/v$version/GitAirlockSetup-$version.exe" `
-            --notes "See https://github.com/erikibolya/git-airlock/releases/tag/v$version" `
-            --out "dist/latest.json"
       - name: Stage release files
         shell: pwsh
         run: |
@@ -135,10 +123,34 @@ jobs:
     needs: [build, desktop]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+      - name: Build update manifest
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          go run ./cmd/updatesign manifest --version "$version" \
+            --installer "dist/GitAirlockSetup-$version.exe" \
+            --url "$base/GitAirlockSetup-$version.exe" \
+            --linux "dist/airlock-linux-amd64.tar.gz" \
+            --linux-url "$base/airlock-linux-amd64.tar.gz" \
+            --linux-arm64 "dist/airlock-linux-arm64.tar.gz" \
+            --linux-arm64-url "$base/airlock-linux-arm64.tar.gz" \
+            --darwin "dist/airlock-darwin-amd64.tar.gz" \
+            --darwin-url "$base/airlock-darwin-amd64.tar.gz" \
+            --darwin-arm64 "dist/airlock-darwin-arm64.tar.gz" \
+            --darwin-arm64-url "$base/airlock-darwin-arm64.tar.gz" \
+            --notes "See https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}" \
+            --out "dist/latest.json"
       - name: Checksums
         run: cd dist && sha256sum * > checksums.txt
       - uses: softprops/action-gh-release@v2

@@ -41,6 +41,55 @@ func TestCompare(t *testing.T) {
 	}
 }
 
+func TestAssetFor(t *testing.T) {
+	m := Manifest{
+		Version:     "1.8.7",
+		Windows:     Asset{URL: "windows", SHA256: "s", Signature: "g"},
+		Linux:       Asset{URL: "linux", SHA256: "s", Signature: "g"},
+		LinuxARM64:  Asset{URL: "linux-arm64", SHA256: "s", Signature: "g"},
+		Darwin:      Asset{URL: "darwin", SHA256: "s", Signature: "g"},
+		DarwinARM64: Asset{URL: "darwin-arm64", SHA256: "s", Signature: "g"},
+	}
+	cases := []struct {
+		goos, goarch, want string
+		ok                 bool
+	}{
+		{"windows", "amd64", "windows", true},
+		{"linux", "amd64", "linux", true},
+		{"linux", "arm64", "linux-arm64", true},
+		{"darwin", "amd64", "darwin", true},
+		{"darwin", "arm64", "darwin-arm64", true},
+		{"linux", "386", "", false},
+		{"freebsd", "amd64", "", false},
+	}
+	for _, c := range cases {
+		a, ok := m.AssetFor(c.goos, c.goarch)
+		if ok != c.ok || a.URL != c.want {
+			t.Fatalf("AssetFor(%s/%s) = %q,%v want %q,%v", c.goos, c.goarch, a.URL, ok, c.want, c.ok)
+		}
+	}
+}
+
+func TestFetchLinuxOnly(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(Manifest{
+			Version: "1.8.7",
+			Linux:   Asset{URL: "http://" + r.Host + "/airlock-linux-amd64.tar.gz", SHA256: "sha", Signature: "sig"},
+		})
+	}))
+	defer srv.Close()
+	m, err := Fetch(context.Background(), srv.URL+"/latest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.AssetFor("linux", "amd64"); !ok {
+		t.Fatal("linux asset not found")
+	}
+	if _, ok := m.AssetFor("windows", "amd64"); ok {
+		t.Fatal("windows asset should be missing")
+	}
+}
+
 func TestSignVerify(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {

@@ -99,6 +99,22 @@ build is newer. `airlock-desktop --check-updates` runs the stable check
 headlessly. Package-manager installs upgrade through `brew`, `scoop` or
 `winget`.
 
+On Linux and WSL, the CLI updates itself from the same signed `latest.json`:
+
+```bash
+airlock self-update --check
+airlock self-update --restart-service git-airlock-ui.service
+airlock install-update-task --restart-service git-airlock-ui.service
+```
+
+`self-update` selects the `linux/amd64`, `linux/arm64`, `darwin/amd64` or
+`darwin/arm64` archive, verifies its Ed25519 signature and SHA256, replaces the
+running binary atomically and keeps the previous one next to it as
+`airlock.old`. Dev builds are skipped unless `--force` is given.
+`install-update-task` creates a daily systemd user timer
+`git-airlock-update.timer`; check it with `systemctl --user list-timers` and the
+logs with `journalctl --user -u git-airlock-update`.
+
 Or build from source:
 
 ```bash
@@ -181,6 +197,8 @@ airlock mcp                  stdio MCP server for agents
 airlock ui [--config ...]...  local web dashboard (one or more repos)
 airlock doctor               diagnose config, CA, token, VPN, scheduler
 airlock install-task         register the periodic worker
+airlock self-update          update the CLI from signed releases (Linux/macOS)
+airlock install-update-task  register the daily self-update timer (Linux/WSL)
 airlock instructions         print an AGENTS.md snippet
 airlock version              print the build version
 ```
@@ -539,8 +557,9 @@ system.
 - The desktop app is packaged as a Windows installer only; Linux/macOS builds
   work but are not packaged. The CLI and the queue remain the source of truth;
   the UIs are conveniences.
-- Automatic updates run on Windows only. Homebrew, Scoop and winget users
-  upgrade through their package manager.
+- The Windows desktop app updates itself automatically. On Linux and WSL,
+  `airlock install-update-task` installs a daily systemd user timer.
+  Homebrew, Scoop and winget users upgrade through their package manager.
 - Windows binaries are not Authenticode-signed while the SignPath Foundation
   application is pending, so SmartScreen and occasional Defender ML heuristics
   may warn about them. The updater still verifies the Ed25519 signature and
