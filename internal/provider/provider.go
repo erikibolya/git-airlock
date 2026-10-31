@@ -74,6 +74,10 @@ type Provider interface {
 	// FindPR returns the newest PR for the branch pair in any state, so the
 	// worker can tell "already merged" from "needs a new PR".
 	FindPR(ctx context.Context, head, base string) (*PR, error)
+	// ListPRs returns the PRs targeting base in the given state ("open", "all"),
+	// newest first. Auto-PR uses it once per cycle instead of two queries per
+	// branch; Head is always set so callers can match branches locally.
+	ListPRs(ctx context.Context, base, state string) ([]*PR, error)
 	CreatePR(ctx context.Context, req CreateRequest) (*PR, error)
 	GetPR(ctx context.Context, number int) (*PR, error)
 	Checks(ctx context.Context, pr *PR) (Checks, error)
