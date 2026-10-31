@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **A stalled push response no longer strands the worker.** `proc.CommandContext` now
+  sets `WaitDelay` and, on Windows, kills the whole `git push` process tree, so a Git
+  child that keeps the output pipe open cannot block the worker past its timeout. If the
+  push actually updated the remote before the response stalled, `push` verifies the
+  remote ref and treats it as success, so auto-PR still runs instead of waiting for the
+  scheduled task's 10-minute limit.
 - **The worker can fast-forward a working copy.** `worktree = "Z:/repos/…"` makes the
   worker bring remote changes into the checkout the human edits after every successful
   sync: fetch the base branch from the mirror and fast-forward it. It never forces — a
