@@ -3,9 +3,11 @@ package gitutil
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -272,5 +274,49 @@ func TestSyncOverSSH(t *testing.T) {
 	report, err = SyncOverSSH(ctx, cache, holly, company, "company")
 	if !errors.Is(err, ErrDiverged) || len(report.Diverged) == 0 {
 		t.Fatalf("want divergence, got %v %+v", err, report)
+	}
+}
+
+// A push whose response stalls after Gitea accepted the ref must not be
+// reported as failed: the branch is already on the remote and the worker would
+// otherwise skip auto-PR and retry a push that already landed.
+func TestPushVerifiesRemoteAfterStalledResponse(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires a POSIX shell shim")
+	}
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := t.TempDir()
+	remote := filepath.Join(base, "remote.git")
+	work := filepath.Join(base, "work")
+	gitCmd(t, "", "init", "--bare", remote)
+	gitCmd(t, "", "init", "-b", "main", work)
+	if err := os.WriteFile(filepath.Join(work, "a.txt"), []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd(t, work, "add", "a.txt")
+	gitCmd(t, work, "commit", "-m", "initial")
+	gitCmd(t, work, "remote", "add", "company", remote)
+
+	shimDir := filepath.Join(base, "shim")
+	if err := os.MkdirAll(shimDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	quoted := strings.ReplaceAll(realGit, "'", `'\''`)
+	shim := fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = push ]; then\n  '%s' \"$@\" || exit $?\n  exit 1\nfi\nexec '%s' \"$@\"\n", quoted, quoted)
+	if err := os.WriteFile(filepath.Join(shimDir, "git"), []byte(shim), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	if err := push(context.Background(), work, "company", "refs/heads/main", "main"); err != nil {
+		t.Fatalf("push returned error even though the remote ref matches: %v", err)
+	}
+	local := strings.TrimSpace(gitCmd(t, work, "rev-parse", "refs/heads/main"))
+	got := strings.TrimSpace(gitCmd(t, "", "--git-dir", remote, "rev-parse", "refs/heads/main"))
+	if got != local {
+		t.Fatalf("remote main = %s, want %s", got, local)
 	}
 }
