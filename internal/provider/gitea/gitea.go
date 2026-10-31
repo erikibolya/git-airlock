@@ -91,9 +91,19 @@ func (p *Provider) ListPRs(ctx context.Context, base, state string) ([]*provider
 	if state == "" {
 		state = "all"
 	}
+	// Two pages at most: page 2 is only fetched when page 1 is full, so a branch's
+	// older PR is still seen in a busy repository without an unbounded crawl.
 	var list []apiPR
-	if err := p.do(ctx, http.MethodGet, "/repos/"+p.repo+"/pulls?state="+state+"&limit=50", nil, &list); err != nil {
-		return nil, err
+	for page := 1; page <= 2; page++ {
+		var pageItems []apiPR
+		u := fmt.Sprintf("/repos/%s/pulls?state=%s&limit=50&page=%d", p.repo, state, page)
+		if err := p.do(ctx, http.MethodGet, u, nil, &pageItems); err != nil {
+			return nil, err
+		}
+		list = append(list, pageItems...)
+		if len(pageItems) < 50 {
+			break
+		}
 	}
 	out := make([]*provider.PR, 0, len(list))
 	for i := range list {

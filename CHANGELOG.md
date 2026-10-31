@@ -7,6 +7,8 @@
   every cycle; against a slow Gitea that outlived the scheduled task's run limit. The
   provider interface now has `ListPRs(base, state)` and the worker matches branches
   locally — one call per cycle, still honoring closed/merged PRs for the same commit.
+  `"open"` maps to GitLab's `opened`, `"all"` sends no state filter, and each provider
+  reads a second page only when the first is full so older PRs are not missed.
 - **The repository picker survives a startup race.** The saved list is read again
   whenever the window is shown while the dashboard is still empty, and a config that is not
   reachable (a mapped drive that is not mounted at logon) stays in the list, marked

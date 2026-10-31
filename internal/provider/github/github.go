@@ -114,9 +114,19 @@ func (p *Provider) ListPRs(ctx context.Context, base, state string) ([]*provider
 	q.Set("sort", "updated")
 	q.Set("direction", "desc")
 	q.Set("per_page", "100")
+	// Two pages at most: page 2 is only fetched when page 1 is full, so a branch's
+	// older PR is still seen in a busy repository without an unbounded crawl.
 	var list []apiPR
-	if err := p.do(ctx, http.MethodGet, "/repos/"+p.repo+"/pulls?"+q.Encode(), nil, &list); err != nil {
-		return nil, err
+	for page := 1; page <= 2; page++ {
+		q.Set("page", fmt.Sprint(page))
+		var pageItems []apiPR
+		if err := p.do(ctx, http.MethodGet, "/repos/"+p.repo+"/pulls?"+q.Encode(), nil, &pageItems); err != nil {
+			return nil, err
+		}
+		list = append(list, pageItems...)
+		if len(pageItems) < 100 {
+			break
+		}
 	}
 	out := make([]*provider.PR, 0, len(list))
 	for i := range list {
