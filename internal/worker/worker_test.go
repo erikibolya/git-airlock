@@ -17,15 +17,28 @@ import (
 
 type fakeProvider struct {
 	pr              *provider.PR
+	prs             []*provider.PR
 	checks          provider.Checks
 	createCalls     int
 	mergeCalls      int
 	mergeStrategy   string
 	deletedBranches []string
+	listCalls       int
+	findCalls       int
 }
 
 func (f *fakeProvider) Name() string               { return "fake" }
 func (f *fakeProvider) Ping(context.Context) error { return nil }
+func (f *fakeProvider) ListPRs(_ context.Context, _, state string) ([]*provider.PR, error) {
+	f.listCalls++
+	var out []*provider.PR
+	for _, pr := range f.prs {
+		if state == "all" || (state == "open" && pr.State == "open" && !pr.Merged) {
+			out = append(out, pr)
+		}
+	}
+	return out, nil
+}
 func (f *fakeProvider) Merge(_ context.Context, _ int, strategy string) error {
 	f.mergeCalls++
 	f.mergeStrategy = strategy
@@ -36,12 +49,14 @@ func (f *fakeProvider) Merge(_ context.Context, _ int, strategy string) error {
 	return nil
 }
 func (f *fakeProvider) FindOpenPR(context.Context, string, string) (*provider.PR, error) {
+	f.findCalls++
 	if f.pr == nil || f.pr.Merged || f.pr.State != "open" {
 		return nil, nil
 	}
 	return f.pr, nil
 }
 func (f *fakeProvider) FindPR(context.Context, string, string) (*provider.PR, error) {
+	f.findCalls++
 	return f.pr, nil
 }
 func (f *fakeProvider) CreatePR(context.Context, provider.CreateRequest) (*provider.PR, error) {
@@ -401,8 +416,14 @@ func TestAutoOpenSkipsOpenPR(t *testing.T) {
 	if err := q.Ensure(); err != nil {
 		t.Fatal(err)
 	}
-	// main is skipped as the base; feature and wip/x both see the same open PR.
-	f := &fakeProvider{pr: &provider.PR{Number: 7, State: "open", HeadSHA: "abc"}, checks: provider.ChecksPending}
+	// main is skipped as the base; feature and wip/x each already have an open PR.
+	f := &fakeProvider{
+		prs: []*provider.PR{
+			{Number: 7, State: "open", Head: "feature", HeadSHA: "abc"},
+			{Number: 8, State: "open", Head: "wip/x", HeadSHA: "def"},
+		},
+		checks: provider.ChecksPending,
+	}
 	w, err := New(cfg, f)
 	if err != nil {
 		t.Fatal(err)
@@ -413,6 +434,38 @@ func TestAutoOpenSkipsOpenPR(t *testing.T) {
 	}
 	if n != 0 {
 		t.Fatalf("queued %d, want 0 when an open PR exists", n)
+	}
+}
+
+// Auto-PR must list pull requests once per cycle, not twice per branch. With a slow
+// provider the per-branch queries made a cycle longer than the scheduler interval.
+func TestAutoOpenListsPRsOncePerCycle(t *testing.T) {
+	mirror := autoPRMirror(t)
+	cfg := &config.Config{
+		Repo: "o/r", Provider: "github", Mirror: mirror, Queue: t.TempDir(),
+		Base: "main", AutoPR: true,
+	}
+	q := queue.New(cfg.Queue)
+	if err := q.Ensure(); err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeProvider{checks: provider.ChecksNone}
+	w, err := New(cfg, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := w.AutoOpen(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("queued %d, want 2 (feature, wip/x)", n)
+	}
+	if f.listCalls != 1 {
+		t.Fatalf("ListPRs calls = %d, want 1 per cycle", f.listCalls)
+	}
+	if f.findCalls != 0 {
+		t.Fatalf("per-branch FindPR/FindOpenPR calls = %d, want 0", f.findCalls)
 	}
 }
 

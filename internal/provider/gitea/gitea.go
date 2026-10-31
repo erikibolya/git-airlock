@@ -85,6 +85,36 @@ func (p *Provider) FindPR(ctx context.Context, head, base string) (*provider.PR,
 	return best, nil
 }
 
+// ListPRs returns the PRs targeting base in the given state ("open" or "all"), newest
+// first. Gitea has no server-side head filter, so Auto-PR matches branches locally.
+func (p *Provider) ListPRs(ctx context.Context, base, state string) ([]*provider.PR, error) {
+	if state == "" {
+		state = "all"
+	}
+	// Two pages at most: page 2 is only fetched when page 1 is full, so a branch's
+	// older PR is still seen in a busy repository without an unbounded crawl.
+	var list []apiPR
+	for page := 1; page <= 2; page++ {
+		var pageItems []apiPR
+		u := fmt.Sprintf("/repos/%s/pulls?state=%s&limit=50&page=%d", p.repo, state, page)
+		if err := p.do(ctx, http.MethodGet, u, nil, &pageItems); err != nil {
+			return nil, err
+		}
+		list = append(list, pageItems...)
+		if len(pageItems) < 50 {
+			break
+		}
+	}
+	out := make([]*provider.PR, 0, len(list))
+	for i := range list {
+		if base != "" && list[i].Base.Ref != base {
+			continue
+		}
+		out = append(out, list[i].toPR())
+	}
+	return out, nil
+}
+
 func (p *Provider) CreatePR(ctx context.Context, req provider.CreateRequest) (*provider.PR, error) {
 	body := map[string]any{
 		"head":  req.Head,
