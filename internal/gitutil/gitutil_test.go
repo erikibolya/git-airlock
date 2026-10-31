@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func gitCmd(t *testing.T, dir string, args ...string) string {
@@ -34,6 +35,20 @@ func commitFile(t *testing.T, dir, name, content, msg string) {
 	}
 	gitCmd(t, dir, "add", name)
 	gitCmd(t, dir, "commit", "-m", msg)
+}
+
+func TestNetworkTimeoutContext(t *testing.T) {
+	if got := networkTimeoutFor(context.Background()); got != defaultNetworkTimeout {
+		t.Fatalf("default: got %v", got)
+	}
+	ctx := WithNetworkTimeout(context.Background(), 5*time.Minute)
+	if got := networkTimeoutFor(ctx); got != 5*time.Minute {
+		t.Fatalf("override: got %v", got)
+	}
+	ctx = WithNetworkTimeout(context.Background(), 0)
+	if got := networkTimeoutFor(ctx); got != defaultNetworkTimeout {
+		t.Fatalf("zero: got %v", got)
+	}
 }
 
 func TestParseRepo(t *testing.T) {

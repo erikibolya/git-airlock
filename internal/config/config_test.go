@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestWriteLoad(t *testing.T) {
@@ -28,6 +29,9 @@ func TestWriteLoad(t *testing.T) {
 	if got.Repo != "owner/name" || got.Provider != "github" || got.Remote != "company" {
 		t.Fatalf("unexpected config: %+v", got)
 	}
+	if got.NetworkTimeout != "90s" || got.NetworkTimeoutValue != 90*time.Second {
+		t.Fatalf("network timeout not defaulted: %q %v", got.NetworkTimeout, got.NetworkTimeoutValue)
+	}
 	home, _ := os.UserHomeDir()
 	if got.Mirror != filepath.Join(home, "mirror.git") {
 		t.Fatalf("mirror not expanded: %s", got.Mirror)
@@ -47,6 +51,57 @@ func TestValidate(t *testing.T) {
 		if err := c.Validate(); err == nil {
 			t.Fatalf("case %d: expected error", i)
 		}
+	}
+}
+
+func TestNetworkTimeout(t *testing.T) {
+	base := Config{Repo: "o/r", Provider: "github", Mirror: "/m", Queue: "/q", Base: "main", Merge: "never", MergeStrategy: "merge"}
+	cases := []struct {
+		in      string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"", 90 * time.Second, false},
+		{"45s", 45 * time.Second, false},
+		{"5m", 5 * time.Minute, false},
+		{"nope", 0, true},
+		{"0s", 0, true},
+		{"-1m", 0, true},
+	}
+	for _, tc := range cases {
+		c := base
+		c.NetworkTimeout = tc.in
+		err := c.Validate()
+		if tc.wantErr {
+			if err == nil {
+				t.Fatalf("%q: expected error", tc.in)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%q: %v", tc.in, err)
+		}
+		if c.NetworkTimeoutValue != tc.want {
+			t.Fatalf("%q: got %v, want %v", tc.in, c.NetworkTimeoutValue, tc.want)
+		}
+		if c.NetworkTimeout == "" {
+			t.Fatalf("%q: NetworkTimeout was not normalised", tc.in)
+		}
+	}
+}
+
+func TestLoadNetworkTimeout(t *testing.T) {
+	path := filepath.Join(t.TempDir(), Filename)
+	body := "repo = \"o/r\"\nprovider = \"github\"\nmirror = \"/m\"\nqueue = \"/q\"\nbase = \"main\"\nmerge = \"never\"\nnetwork_timeout = \"5m\"\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.NetworkTimeoutValue != 5*time.Minute {
+		t.Fatalf("got %v, want 5m", got.NetworkTimeoutValue)
 	}
 }
 

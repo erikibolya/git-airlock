@@ -13,6 +13,11 @@ queue    = "~/.airlock/queue"
 provider = "gitea"                   # gitea | github | gitlab
 api      = "https://gitea.example.com/api/v1"
 ca       = ""
+
+# Timeout for network git operations (fetch/push). Default 90s.
+# Increase on slow links or WSL 9p mounts, e.g. "5m".
+network_timeout = "90s"
+
 base     = "main"
 merge    = "when-green"
 
