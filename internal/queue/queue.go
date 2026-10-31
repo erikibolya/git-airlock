@@ -39,8 +39,10 @@ type Request struct {
 	Strategy string `json:"strategy,omitempty"`
 	// DeleteBranch removes the source branch after a successful merge.
 	DeleteBranch bool `json:"delete_branch,omitempty"`
-	Number       int  `json:"number,omitempty"`
-	DryRun       bool `json:"dry_run,omitempty"`
+	// Hold creates the PR as a draft so native auto-merge waits for a human review.
+	Hold   bool `json:"hold,omitempty"`
+	Number int  `json:"number,omitempty"`
+	DryRun bool `json:"dry_run,omitempty"`
 }
 
 // Result is written by the worker.
