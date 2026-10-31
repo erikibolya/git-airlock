@@ -535,6 +535,13 @@ func BranchesAhead(ctx context.Context, dir, baseRef string) ([]Branch, error) {
 		baseSHA, _ = revParse(ctx, dir, baseRef)
 	}
 	baseName := strings.TrimPrefix(baseRef, "refs/heads/")
+	// A remote-tracking base (refs/remotes/<remote>/<branch>) is the same branch as
+	// refs/heads/<branch>, so it must not be listed as a branch ahead of itself.
+	if short, ok := strings.CutPrefix(baseRef, "refs/remotes/"); ok {
+		if i := strings.IndexByte(short, '/'); i >= 0 {
+			baseName = short[i+1:]
+		}
+	}
 	var branches []Branch
 	for _, name := range strings.Split(out, "\n") {
 		name = strings.TrimSpace(name)
