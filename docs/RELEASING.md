@@ -44,7 +44,7 @@ git tag -a v$VERSION -m "v$VERSION"
 git push origin v$VERSION
 ```
 
-Watch the run (the `gh` CLI is installed in WSL on the Host machine):
+Watch the run (the `gh` CLI is installed in WSL on the build host):
 
 ```bash
 gh run list --limit 3

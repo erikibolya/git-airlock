@@ -394,11 +394,11 @@ When the workstation cannot mount the mirror at all, keep a local cache instead.
 The isolated config stays unchanged; the worker config adds:
 
 ```toml
-mirror = "~/.cache/git-airlock/mirrors/Project.git"   # cache, created on first sync
-mirror_remote = "ssh://user@host/path/to/repos/.mirrors/Project.git"
+mirror = "~/.cache/git-airlock/mirrors/project.git"   # cache, created on first sync
+mirror_remote = "ssh://user@host/path/to/project.git"
 queue = "git"
-queue_remote = "ssh://user@host/path/to/repos/.mirrors/Project.git"
-remote_url = "https://gitea.example.com/acme/Project.git"
+queue_remote = "ssh://user@host/path/to/project.git"
+remote_url = "https://gitea.example.com/acme/project.git"
 ```
 
 The worker fetches both the SSH mirror and the private remote into the cache,
