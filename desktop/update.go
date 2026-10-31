@@ -17,9 +17,9 @@ import (
 var version = "dev"
 
 const (
-	updateManifestURL = "https://github.com/erikibolya/git-airlock/releases/latest/download/latest.json"
+	updateManifestURL = update.ManifestURL
 	devManifestURL    = "https://github.com/erikibolya/git-airlock/releases/download/dev/dev.json"
-	updatePublicKey   = "Acgkri/7VClnySjUZCHXEKZducmObsLKc6mgcfgiJWQ="
+	updatePublicKey   = update.PublicKey
 	releasePageURL    = "https://github.com/erikibolya/git-airlock/releases/latest"
 )
 

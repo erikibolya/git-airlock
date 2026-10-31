@@ -19,19 +19,59 @@ import (
 	"time"
 )
 
-// Asset describes one downloadable installer.
+// Asset describes one downloadable installer or archive.
 type Asset struct {
 	URL       string `json:"url"`
 	SHA256    string `json:"sha256"`
 	Signature string `json:"signature"`
 }
 
+// Valid reports whether the asset has all required fields.
+func (a Asset) Valid() bool {
+	return a.URL != "" && a.SHA256 != "" && a.Signature != ""
+}
+
 // Manifest is latest.json from a release.
 type Manifest struct {
-	Version string `json:"version"`
-	Notes   string `json:"notes,omitempty"`
-	Windows Asset  `json:"windows"`
+	Version     string `json:"version"`
+	Notes       string `json:"notes,omitempty"`
+	Windows     Asset  `json:"windows,omitempty"`
+	Linux       Asset  `json:"linux,omitempty"`
+	LinuxARM64  Asset  `json:"linux_arm64,omitempty"`
+	Darwin      Asset  `json:"darwin,omitempty"`
+	DarwinARM64 Asset  `json:"darwin_arm64,omitempty"`
 }
+
+// AssetFor returns the signed asset for a GOOS/GOARCH pair.
+func (m *Manifest) AssetFor(goos, goarch string) (Asset, bool) {
+	var a Asset
+	switch goos + "/" + goarch {
+	case "windows/amd64":
+		a = m.Windows
+	case "linux/amd64":
+		a = m.Linux
+	case "linux/arm64":
+		a = m.LinuxARM64
+	case "darwin/amd64":
+		a = m.Darwin
+	case "darwin/arm64":
+		a = m.DarwinARM64
+	default:
+		return Asset{}, false
+	}
+	return a, a.Valid()
+}
+
+// HasAssets reports whether the manifest contains at least one complete asset.
+func (m *Manifest) HasAssets() bool {
+	return m.Windows.Valid() || m.Linux.Valid() || m.LinuxARM64.Valid() || m.Darwin.Valid() || m.DarwinARM64.Valid()
+}
+
+// PublicKey is the Ed25519 key that signs release manifests.
+const PublicKey = "Acgkri/7VClnySjUZCHXEKZducmObsLKc6mgcfgiJWQ="
+
+// ManifestURL is the stable signed release manifest.
+const ManifestURL = "https://github.com/erikibolya/git-airlock/releases/latest/download/latest.json"
 
 // NormalizeVersion drops a leading v and whitespace.
 func NormalizeVersion(v string) string {
@@ -193,7 +233,7 @@ func Fetch(ctx context.Context, url string) (*Manifest, error) {
 	if err := dec.Decode(&m); err != nil {
 		return nil, fmt.Errorf("decode manifest: %w", err)
 	}
-	if m.Version == "" || m.Windows.URL == "" || m.Windows.SHA256 == "" || m.Windows.Signature == "" {
+	if m.Version == "" || !m.HasAssets() {
 		return nil, fmt.Errorf("manifest is missing required fields")
 	}
 	return &m, nil

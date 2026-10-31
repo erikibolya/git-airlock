@@ -55,6 +55,43 @@ func (o *Options) normalize() error {
 	return nil
 }
 
+// UpdateOptions controls InstallUpdateTask.
+type UpdateOptions struct {
+	// ExePath is the airlock binary; defaults to the running executable.
+	ExePath string
+	// ManifestURL is the signed release manifest.
+	ManifestURL string
+	// RestartServices are systemd user services to restart after an update.
+	RestartServices []string
+	// Print only prints the generated files/commands.
+	Print bool
+}
+
+func (o *UpdateOptions) normalize() error {
+	if o.ExePath == "" {
+		exe, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		o.ExePath = exe
+	}
+	if abs, err := filepath.Abs(o.ExePath); err == nil {
+		o.ExePath = abs
+	}
+	if o.ManifestURL == "" {
+		return fmt.Errorf("manifest URL is required")
+	}
+	return nil
+}
+
+// InstallUpdateTask registers the daily self-update timer.
+func InstallUpdateTask(o UpdateOptions) error {
+	if err := o.normalize(); err != nil {
+		return err
+	}
+	return installUpdate(o)
+}
+
 // Install registers a periodic worker with the platform scheduler.
 func Install(o Options) error {
 	if err := o.normalize(); err != nil {
