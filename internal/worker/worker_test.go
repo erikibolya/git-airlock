@@ -18,6 +18,7 @@ import (
 type fakeProvider struct {
 	pr              *provider.PR
 	prs             []*provider.PR
+	lastCreate      provider.CreateRequest
 	checks          provider.Checks
 	createCalls     int
 	mergeCalls      int
@@ -59,8 +60,9 @@ func (f *fakeProvider) FindPR(context.Context, string, string) (*provider.PR, er
 	f.findCalls++
 	return f.pr, nil
 }
-func (f *fakeProvider) CreatePR(context.Context, provider.CreateRequest) (*provider.PR, error) {
+func (f *fakeProvider) CreatePR(_ context.Context, req provider.CreateRequest) (*provider.PR, error) {
 	f.createCalls++
+	f.lastCreate = req
 	n := 1
 	if f.pr != nil {
 		if f.pr.State == "open" {
@@ -592,5 +594,113 @@ func TestDryRunNeverDeletesBranch(t *testing.T) {
 	}
 	if f.createCalls != 0 {
 		t.Fatal("dry run created a PR")
+	}
+}
+
+// worktreeFixture builds a bare mirror with main and a clone of it.
+func worktreeFixture(t *testing.T) (mirror, upstream, worktree string) {
+	t.Helper()
+	base := t.TempDir()
+	mirror = filepath.Join(base, "mirror.git")
+	testGit(t, "", "init", "--bare", mirror)
+	testGit(t, mirror, "symbolic-ref", "HEAD", "refs/heads/main")
+
+	upstream = filepath.Join(base, "upstream")
+	if err := os.MkdirAll(upstream, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testGit(t, upstream, "init")
+	testGit(t, upstream, "checkout", "-b", "main")
+	commitTestFile(t, upstream, "a.txt", "a", "base")
+	testGit(t, upstream, "remote", "add", "origin", mirror)
+	testGit(t, upstream, "push", "origin", "main")
+
+	worktree = filepath.Join(base, "worktree")
+	testGit(t, base, "clone", mirror, worktree)
+	return mirror, upstream, worktree
+}
+
+func worktreeWorker(t *testing.T, mirror, worktree string) *Worker {
+	t.Helper()
+	cfg := &config.Config{Repo: "o/r", Mirror: mirror, Worktree: worktree, Base: "main", Queue: t.TempDir()}
+	w, err := New(cfg, &fakeProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return w
+}
+
+// The worker runs on the VPN side, so fast-forwarding the checkout is how remote changes
+// reach the human's working copy.
+func TestSyncWorktreeFastForwards(t *testing.T) {
+	mirror, upstream, worktree := worktreeFixture(t)
+	commitTestFile(t, upstream, "b.txt", "b", "next")
+	testGit(t, upstream, "push", "origin", "main")
+	want := testGit(t, upstream, "rev-parse", "HEAD")
+
+	worktreeWorker(t, mirror, worktree).SyncWorktree(context.Background())
+
+	if got := testGit(t, worktree, "rev-parse", "refs/heads/main"); got != want {
+		t.Fatalf("worktree main = %s, want %s", got, want)
+	}
+}
+
+// Local work is never rewritten: a branch that is ahead or diverged stays as it is.
+func TestSyncWorktreeKeepsLocalCommits(t *testing.T) {
+	mirror, upstream, worktree := worktreeFixture(t)
+	commitTestFile(t, worktree, "local.txt", "l", "local work")
+	local := testGit(t, worktree, "rev-parse", "HEAD")
+	commitTestFile(t, upstream, "b.txt", "b", "next")
+	testGit(t, upstream, "push", "origin", "main")
+
+	worktreeWorker(t, mirror, worktree).SyncWorktree(context.Background())
+
+	if got := testGit(t, worktree, "rev-parse", "refs/heads/main"); got != local {
+		t.Fatalf("worktree main = %s, want untouched %s", got, local)
+	}
+}
+
+// When the human is on another branch the ref moves without touching HEAD.
+func TestSyncWorktreeMovesRefWhenCheckedOutElsewhere(t *testing.T) {
+	mirror, upstream, worktree := worktreeFixture(t)
+	testGit(t, worktree, "checkout", "-b", "other")
+	commitTestFile(t, upstream, "b.txt", "b", "next")
+	testGit(t, upstream, "push", "origin", "main")
+	want := testGit(t, upstream, "rev-parse", "HEAD")
+
+	worktreeWorker(t, mirror, worktree).SyncWorktree(context.Background())
+
+	if got := testGit(t, worktree, "rev-parse", "refs/heads/main"); got != want {
+		t.Fatalf("worktree main = %s, want %s", got, want)
+	}
+	if head := testGit(t, worktree, "symbolic-ref", "--short", "HEAD"); head != "other" {
+		t.Fatalf("HEAD = %s, want other", head)
+	}
+}
+
+func TestOpenHoldCreatesDraft(t *testing.T) {
+	f := &fakeProvider{checks: provider.ChecksSuccess}
+	w, _ := newWorker(t, f)
+
+	res := w.handle(context.Background(), queue.Request{
+		Action: queue.ActionOpen, Head: "feature", Base: "main", Merge: "never", Hold: true, Title: "Add thing",
+	})
+	if !res.OK {
+		t.Fatalf("open failed: %s", res.Message)
+	}
+	if f.lastCreate.Title != "WIP: Add thing" {
+		t.Fatalf("title = %q, want the WIP: draft prefix", f.lastCreate.Title)
+	}
+
+	f2 := &fakeProvider{checks: provider.ChecksSuccess}
+	w2, _ := newWorker(t, f2)
+	res = w2.handle(context.Background(), queue.Request{
+		Action: queue.ActionOpen, Head: "feature", Base: "main", Merge: "never", Title: "Second thing",
+	})
+	if !res.OK {
+		t.Fatalf("second open failed: %s", res.Message)
+	}
+	if f2.lastCreate.Title != "Second thing" {
+		t.Fatalf("title = %q, want it unchanged without hold", f2.lastCreate.Title)
 	}
 }
