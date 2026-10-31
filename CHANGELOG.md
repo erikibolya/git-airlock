@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **The repository picker survives a startup race.** The saved list is read again
+  whenever the window is shown while the dashboard is still empty, and a config that is not
+  reachable (a mapped drive that is not mounted at logon) stays in the list, marked
+  "not reachable", instead of being dropped and then forgotten by the next save.
 - **No auto-PR after a failed sync.** When the mirror sync fails, the worker skips
   proposing new pull requests for that run. The branches a failed sync did not push do not
   exist on the remote, and Gitea answers `POST /pulls` for a missing head branch with its
