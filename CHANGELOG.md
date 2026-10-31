@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+<!-- verify: auto-merge dispatches the Dev build -->
+
 - **Dev builds follow auto-merge automatically.** A merge performed with
   `GITHUB_TOKEN` does not emit a push workflow event, so the auto-merge workflow now
   waits for the native merge and dispatches the rolling Dev build explicitly.
