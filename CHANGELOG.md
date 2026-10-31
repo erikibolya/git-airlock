@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Dev builds follow auto-merge automatically.** A merge performed with
+  `GITHUB_TOKEN` does not emit a push workflow event, so the auto-merge workflow now
+  waits for the native merge and dispatches the rolling Dev build explicitly.
 - **A stalled push response no longer strands the worker.** `proc.CommandContext` now
   sets `WaitDelay` and, on Windows, kills the whole `git push` process tree, so a Git
   child that keeps the output pipe open cannot block the worker past its timeout. If the
