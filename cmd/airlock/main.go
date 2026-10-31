@@ -280,17 +280,18 @@ func cmdInit(args []string) error {
 	}
 
 	if *configure {
+		initCtx := gitutil.WithNetworkTimeout(context.Background(), cfg.NetworkTimeoutValue)
 		expanded, err := config.ExpandHome(cfg.Mirror)
 		if err != nil {
 			return err
 		}
 		if _, err := os.Stat(expanded); os.IsNotExist(err) {
 			fmt.Printf("creating bare mirror %s\n", expanded)
-			if err := gitutil.CloneBare(context.Background(), root, expanded); err != nil {
+			if err := gitutil.CloneBare(initCtx, root, expanded); err != nil {
 				return err
 			}
 		}
-		original, err := gitutil.ConfigureRemotes(context.Background(), root, expanded, cfg.Remote)
+		original, err := gitutil.ConfigureRemotes(initCtx, root, expanded, cfg.Remote)
 		if err != nil {
 			return err
 		}

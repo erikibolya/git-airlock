@@ -58,7 +58,14 @@ func (w *Worker) Run(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	for _, req := range requests {
-		reqCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		// A queued sync may need the configured network timeout plus room for
+		// the local ref updates that follow it. Other actions only call the
+		// provider API and keep the original two-minute budget.
+		reqTimeout := 2 * time.Minute
+		if req.Action == queue.ActionSync && w.Cfg.NetworkTimeoutValue+30*time.Second > reqTimeout {
+			reqTimeout = w.Cfg.NetworkTimeoutValue + 30*time.Second
+		}
+		reqCtx, cancel := context.WithTimeout(ctx, reqTimeout)
 		res := w.handle(reqCtx, req)
 		cancel()
 		if err := w.Q.WriteResult(&res); err != nil {

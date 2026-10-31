@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -34,6 +35,11 @@ type Config struct {
 	API string `toml:"api"`
 	// CA is an optional PEM bundle for a private/self-signed CA.
 	CA string `toml:"ca"`
+	// NetworkTimeout is the timeout for network git operations (fetch/push),
+	// as a Go duration string. Defaults to 90s.
+	NetworkTimeout string `toml:"network_timeout"`
+	// NetworkTimeoutValue is the parsed NetworkTimeout, set by Validate.
+	NetworkTimeoutValue time.Duration `toml:"-"`
 	// Base is the default target branch for pull requests.
 	Base string `toml:"base"`
 	// Merge is the default merge policy: never, when-green or now.
@@ -113,6 +119,9 @@ func (c *Config) applyDefaults() {
 	if c.Mirror == "" && c.Repo != "" {
 		c.Mirror = "~/.airlock/" + Slug(c.Repo) + ".git"
 	}
+	if c.NetworkTimeout == "" {
+		c.NetworkTimeout = "90s"
+	}
 }
 
 func (c *Config) expandPaths() error {
@@ -152,6 +161,17 @@ func (c *Config) Validate() error {
 	if c.Base == "" {
 		return errors.New("base is required")
 	}
+	if c.NetworkTimeout == "" {
+		c.NetworkTimeout = "90s"
+	}
+	timeout, err := time.ParseDuration(c.NetworkTimeout)
+	if err != nil {
+		return fmt.Errorf("network_timeout must be a Go duration such as 90s or 5m: %w", err)
+	}
+	if timeout <= 0 {
+		return fmt.Errorf("network_timeout must be positive, got %q", c.NetworkTimeout)
+	}
+	c.NetworkTimeoutValue = timeout
 	switch c.Merge {
 	case "never", "when-green", "now":
 	default:
@@ -193,6 +213,10 @@ func Write(path string, c *Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+	networkTimeout := c.NetworkTimeout
+	if networkTimeout == "" {
+		networkTimeout = "90s"
+	}
 	body := fmt.Sprintf(`# Git Airlock configuration
 # See https://github.com/erikibolya/git-airlock for the full documentation.
 
@@ -225,6 +249,10 @@ api = %q
 # Optional PEM CA bundle for a private/self-signed certificate.
 ca = %q
 
+# Timeout for network git operations (fetch/push). Default 90s.
+# Increase on slow links or WSL 9p mounts, e.g. "5m".
+network_timeout = %q
+
 # Default pull-request target branch.
 base = %q
 
@@ -242,6 +270,6 @@ auto_pr = false
 
 # Branch patterns that auto_pr ignores (filepath.Match syntax).
 # auto_pr_ignore = ["wip/*", "dependabot/*"]
-`, c.Repo, c.Remote, c.Mirror, c.Queue, c.QueueRemote, c.Provider, c.API, c.CA, c.Base, c.Merge, c.MergeStrategy)
+`, c.Repo, c.Remote, c.Mirror, c.Queue, c.QueueRemote, c.Provider, c.API, c.CA, networkTimeout, c.Base, c.Merge, c.MergeStrategy)
 	return os.WriteFile(path, []byte(body), 0o644)
 }

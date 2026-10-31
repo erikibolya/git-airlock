@@ -337,6 +337,7 @@ queue    = "~/.airlock/queue"        # shared dir, or "git" for refs/airlock/*
 provider = "gitea"                   # gitea | github | gitlab
 api      = "https://gitea.example.com/api/v1"
 ca       = ""                        # optional PEM bundle
+network_timeout = "90s"              # git fetch/push timeout (Go duration)
 base     = "main"                    # default PR target
 merge    = "when-green"              # never | when-green | now
 merge_strategy = "merge"             # merge | squash | rebase
@@ -349,6 +350,9 @@ auto_pr_ignore = ["wip/*"]           # optional branch globs to skip
 
 The file contains no secrets; it can be committed if the paths are the same on
 all machines. `AIRLOCK_CONFIG` points the CLI at another file.
+
+`network_timeout` applies to git fetch and push operations. Raise it on slow
+VPN links or WSL 9p mounts, for example `network_timeout = "5m"`.
 
 ### Tokens
 

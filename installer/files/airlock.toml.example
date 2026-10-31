@@ -32,6 +32,10 @@ api = "https://gitea.example.com/api/v1"
 # Optional PEM bundle for a private or self-signed certificate.
 # ca = "C:/certs/gitea.crt"
 
+# Timeout for network git operations (fetch/push). Default 90s.
+# Increase on slow links or WSL 9p mounts, e.g. "5m".
+# network_timeout = "90s"
+
 # Default pull-request target branch.
 base = "main"
 

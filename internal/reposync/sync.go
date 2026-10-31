@@ -11,6 +11,7 @@ import (
 // Sync runs the shared-mirror sync or the SSH cache sync when mirror_remote is
 // configured.
 func Sync(ctx context.Context, cfg *config.Config) (gitutil.SyncReport, error) {
+	ctx = gitutil.WithNetworkTimeout(ctx, cfg.NetworkTimeoutValue)
 	if cfg.MirrorRemote != "" {
 		return gitutil.SyncOverSSH(ctx, cfg.Mirror, cfg.MirrorRemote, cfg.RemoteURL, cfg.Remote)
 	}

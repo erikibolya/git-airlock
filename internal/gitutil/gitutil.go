@@ -17,9 +17,27 @@ import (
 )
 
 const (
-	networkTimeout = 90 * time.Second
-	localTimeout   = 60 * time.Second
+	defaultNetworkTimeout = 90 * time.Second
+	localTimeout          = 60 * time.Second
 )
+
+type networkTimeoutKey struct{}
+
+// WithNetworkTimeout returns a context carrying the timeout for network git
+// operations. A non-positive value keeps the default.
+func WithNetworkTimeout(ctx context.Context, d time.Duration) context.Context {
+	if d <= 0 {
+		d = defaultNetworkTimeout
+	}
+	return context.WithValue(ctx, networkTimeoutKey{}, d)
+}
+
+func networkTimeoutFor(ctx context.Context) time.Duration {
+	if d, ok := ctx.Value(networkTimeoutKey{}).(time.Duration); ok && d > 0 {
+		return d
+	}
+	return defaultNetworkTimeout
+}
 
 // SyncReport describes what a mirror sync changed.
 type SyncReport struct {
@@ -176,6 +194,7 @@ func ConfigureRemotes(ctx context.Context, root, mirror, remoteName string) (str
 // private remote. It never force-pushes or rewinds a branch.
 func Sync(ctx context.Context, mirror, remote string) (SyncReport, error) {
 	var report SyncReport
+	timeout := networkTimeoutFor(ctx)
 
 	bare, err := run(ctx, mirror, localTimeout, false, "rev-parse", "--is-bare-repository")
 	if err != nil {
@@ -185,9 +204,9 @@ func Sync(ctx context.Context, mirror, remote string) (SyncReport, error) {
 		return report, fmt.Errorf("mirror %s is not a bare repository", mirror)
 	}
 
-	fetchCtx, cancel := context.WithTimeout(ctx, networkTimeout)
+	fetchCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	if _, err := run(fetchCtx, mirror, networkTimeout, true, "fetch", "--prune", remote, "+refs/heads/*:refs/remotes/"+remote+"/*"); err != nil {
+	if _, err := run(fetchCtx, mirror, timeout, true, "fetch", "--prune", remote, "+refs/heads/*:refs/remotes/"+remote+"/*"); err != nil {
 		return report, fmt.Errorf("fetch: %w", err)
 	}
 
@@ -227,8 +246,8 @@ func Sync(ctx context.Context, mirror, remote string) (SyncReport, error) {
 		if !ancestor {
 			continue // handled by the push loop below or diverged
 		}
-		pushCtx, cancel := context.WithTimeout(ctx, networkTimeout)
-		_, err = run(pushCtx, mirror, networkTimeout, true, "update-ref", localRef, remoteSHA, localSHA)
+		pushCtx, cancel := context.WithTimeout(ctx, timeout)
+		_, err = run(pushCtx, mirror, timeout, true, "update-ref", localRef, remoteSHA, localSHA)
 		cancel()
 		if err != nil {
 			return report, fmt.Errorf("fast-forward %s: %w", branch, err)
@@ -276,7 +295,7 @@ func Sync(ctx context.Context, mirror, remote string) (SyncReport, error) {
 		report.Diverged = append(report.Diverged, branch)
 	}
 
-	if _, err := run(ctx, mirror, networkTimeout, true, "push", "--tags", remote); err != nil {
+	if _, err := run(ctx, mirror, timeout, true, "push", "--tags", remote); err != nil {
 		report.Warnings = append(report.Warnings, fmt.Sprintf("tags: %v", err))
 	}
 
@@ -291,6 +310,7 @@ func Sync(ctx context.Context, mirror, remote string) (SyncReport, error) {
 // never force-pushes: diverged branches are reported in the result.
 func SyncOverSSH(ctx context.Context, dir, mirrorRemote, remoteURL, remoteName string) (SyncReport, error) {
 	var report SyncReport
+	timeout := networkTimeoutFor(ctx)
 	if mirrorRemote == "" {
 		return report, errors.New("mirror_remote is empty")
 	}
@@ -313,8 +333,8 @@ func SyncOverSSH(ctx context.Context, dir, mirrorRemote, remoteURL, remoteName s
 
 	remotes := []string{"mirror", remoteName}
 	for _, r := range remotes {
-		fetchCtx, cancel := context.WithTimeout(ctx, networkTimeout)
-		_, err := run(fetchCtx, dir, networkTimeout, true, "fetch", "--prune", "--tags", r,
+		fetchCtx, cancel := context.WithTimeout(ctx, timeout)
+		_, err := run(fetchCtx, dir, timeout, true, "fetch", "--prune", "--tags", r,
 			"+refs/heads/*:refs/remotes/"+r+"/*")
 		cancel()
 		if err != nil {
@@ -435,8 +455,8 @@ func SyncOverSSH(ctx context.Context, dir, mirrorRemote, remoteURL, remoteName s
 	}
 
 	for _, r := range remotes {
-		pushCtx, cancel := context.WithTimeout(ctx, networkTimeout)
-		_, err := run(pushCtx, dir, networkTimeout, true, "push", "--tags", r)
+		pushCtx, cancel := context.WithTimeout(ctx, timeout)
+		_, err := run(pushCtx, dir, timeout, true, "push", "--tags", r)
 		cancel()
 		if err != nil {
 			report.Warnings = append(report.Warnings, fmt.Sprintf("tags -> %s: %v", r, err))
@@ -479,9 +499,10 @@ func ensureRemote(ctx context.Context, dir, name, rawURL string) error {
 }
 
 func push(ctx context.Context, dir, remote, ref, branch string) error {
-	pushCtx, cancel := context.WithTimeout(ctx, networkTimeout)
+	timeout := networkTimeoutFor(ctx)
+	pushCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	_, err := run(pushCtx, dir, networkTimeout, true, "push", remote, ref+":refs/heads/"+branch)
+	_, err := run(pushCtx, dir, timeout, true, "push", remote, ref+":refs/heads/"+branch)
 	if err != nil {
 		return fmt.Errorf("push %s: %w", branch, err)
 	}
